@@ -144,8 +144,13 @@ struct TutorialRule {
     /// NumericValue: absolute tolerance; NumericRange: slack allowed outside the bounds
     double tolerance = 0.0;
     bool hasIdeal    = false; ///< whether @ref ideal was given
-    QString label;            ///< what this position means, e.g. "cutoff distance"
-    QString hint;             ///< nudge shown for this position before the full reveal
+    /// compare letter case exactly.  Command and style names are matched
+    /// case-insensitively by default, the way LAMMPS treats them; set this for
+    /// the positions where case carries meaning, such as file names and
+    /// variable names.
+    bool caseSensitive = false;
+    QString label; ///< what this position means, e.g. "cutoff distance"
+    QString hint;  ///< nudge shown for this position before the full reveal
 };
 
 /**

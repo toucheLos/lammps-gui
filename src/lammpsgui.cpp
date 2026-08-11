@@ -31,6 +31,8 @@
 #include "slideshow.h"
 #include "stdcapture.h"
 #include "syntaxcheck.h"
+#include "tutorialcontent.h"
+#include "tutorialview.h"
 #include "tutorialwizard.h"
 #include "urldownloader.h"
 #include "windowlayout.h"
@@ -500,6 +502,26 @@ void LammpsGui::createTutorialMenu()
             if (i >= coll.available) action->setEnabled(false);
         }
     }
+
+    // Preview entry for the interactive tutorial mode.  The content is loaded
+    // from the bundled resource, so this works offline and with no download.
+    // Temporary: the finished feature hangs off the wizard's "Interactive"
+    // option rather than a menu entry of its own.
+    menu->addSeparator();
+    addMenuAction(menu, ":/icons/tutorial1-logo.png", "&Interactive Tutorial 1 (preview)", "",
+                  [this]() {
+                      QList<ContentIssue> issues;
+                      auto content =
+                          loadTutorialFile(QStringLiteral(":/tutorials/lj-fluid.json"), &issues);
+                      if (content.isEmpty()) {
+                          critical(this, "LAMMPS-GUI Error", "Cannot load the tutorial content:",
+                                   formatContentIssues(issues, 10));
+                          return;
+                      }
+                      auto *view = new TutorialView(content, this);
+                      view->setAttribute(Qt::WA_DeleteOnClose);
+                      view->show();
+                  });
 }
 
 void LammpsGui::createAboutMenu()

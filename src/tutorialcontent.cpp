@@ -187,7 +187,7 @@ const QSet<QString> RULE_KEYS = {
     QStringLiteral("type"),  QStringLiteral("text"),     QStringLiteral("pattern"),
     QStringLiteral("enum"),  QStringLiteral("category"), QStringLiteral("min"),
     QStringLiteral("max"),   QStringLiteral("ideal"),    QStringLiteral("tolerance"),
-    QStringLiteral("label"), QStringLiteral("hint"),
+    QStringLiteral("label"), QStringLiteral("hint"),     QStringLiteral("case_sensitive"),
 };
 const QSet<QString> FEEDBACK_KEYS = {
     QStringLiteral("correct"), QStringLiteral("wrong"),       QStringLiteral("below"),
@@ -364,6 +364,7 @@ TutorialRule parseRule(const QJsonObject &obj, const QString &path, Ctx &ctx)
     readStringList(obj, QStringLiteral("enum"), path, ctx, rule.choices);
     readString(obj, QStringLiteral("label"), path, ctx, rule.label);
     readString(obj, QStringLiteral("hint"), path, ctx, rule.hint);
+    readBool(obj, QStringLiteral("case_sensitive"), path, ctx, rule.caseSensitive);
     readDouble(obj, QStringLiteral("min"), path, ctx, rule.min);
     readDouble(obj, QStringLiteral("max"), path, ctx, rule.max);
     readDouble(obj, QStringLiteral("tolerance"), path, ctx, rule.tolerance);

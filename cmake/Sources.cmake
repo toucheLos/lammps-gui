@@ -99,6 +99,10 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/stdcapture.h
   ${CMAKE_SOURCE_DIR}/src/tutorialcontent.cpp
   ${CMAKE_SOURCE_DIR}/src/tutorialcontent.h
+  ${CMAKE_SOURCE_DIR}/src/tutorialeval.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialeval.h
+  ${CMAKE_SOURCE_DIR}/src/tutorialview.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialview.h
   ${CMAKE_SOURCE_DIR}/src/tutorialwizard.cpp
   ${CMAKE_SOURCE_DIR}/src/tutorialwizard.h
   ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp
