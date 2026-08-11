@@ -177,6 +177,23 @@ target_link_libraries(test_tutorialeval PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_tutorialeval)
 
+# Test executable for the tutorial engine (Qt Core only; the engine is a QObject,
+# so this target needs moc, but not Qt Test: signals are counted with a local
+# helper rather than QSignalSpy, to avoid a new dependency for one assertion)
+add_executable(test_tutorialengine
+  test_tutorialengine.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialengine.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialeval.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialcontent.cpp
+  ${CMAKE_SOURCE_DIR}/src/lammpssyntax.cpp
+)
+
+set_target_properties(test_tutorialengine PROPERTIES AUTOMOC ON)
+target_include_directories(test_tutorialengine PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_tutorialengine PRIVATE GTest::gtest_main Qt6::Core)
+
+gtest_discover_tests(test_tutorialengine)
+
 # Test executable for the pre-run input syntax checker (Qt Core only)
 add_executable(test_syntaxcheck
   test_syntaxcheck.cpp
