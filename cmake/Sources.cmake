@@ -97,6 +97,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/slideshow.h
   ${CMAKE_SOURCE_DIR}/src/stdcapture.cpp
   ${CMAKE_SOURCE_DIR}/src/stdcapture.h
+  ${CMAKE_SOURCE_DIR}/src/tutorialcontent.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialcontent.h
   ${CMAKE_SOURCE_DIR}/src/tutorialwizard.cpp
   ${CMAKE_SOURCE_DIR}/src/tutorialwizard.h
   ${CMAKE_SOURCE_DIR}/src/urldownloader.cpp

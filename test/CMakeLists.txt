@@ -148,6 +148,18 @@ target_link_libraries(test_lammpssyntax PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_lammpssyntax)
 
+# Test executable for the interactive tutorial content loader (Qt Core only)
+add_executable(test_tutorialcontent
+  test_tutorialcontent.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialcontent.cpp
+  ${CMAKE_SOURCE_DIR}/src/lammpssyntax.cpp
+)
+
+target_include_directories(test_tutorialcontent PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_tutorialcontent PRIVATE GTest::gtest_main Qt6::Core)
+
+gtest_discover_tests(test_tutorialcontent)
+
 # Test executable for the pre-run input syntax checker (Qt Core only)
 add_executable(test_syntaxcheck
   test_syntaxcheck.cpp

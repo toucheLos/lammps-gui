@@ -168,6 +168,12 @@ constexpr double DOCK_SPLIT_VERTICAL = 0.25;
 /// it at the front of the shared menu bar without knowing the view's class
 inline const QString VIEW_FILE_MENU = QStringLiteral("viewFileMenu");
 
+// ---- Interactive tutorial content ----------------------------------------
+/// Schema version of the tutorial content files this build can read.  Bump it
+/// only when an existing key changes *meaning*: purely additive keys are
+/// tolerated by the loader as warnings, so adding one does not need a bump.
+constexpr int TUTORIAL_SCHEMA_VERSION = 1;
+
 // ---- Command window ------------------------------------------------------
 constexpr int COMMAND_SCROLLBACK_LINES = 5000; ///< Lines of transcript kept
 constexpr int COMMAND_HISTORY_MAX      = 200;  ///< Command lines remembered between sessions

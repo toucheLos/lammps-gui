@@ -50,6 +50,61 @@ the ``TutorialWizard`` consume the table through the
 
 -----
 
+Interactive Tutorial Content
+----------------------------
+
+The interactive tutorial mode is driven entirely by data.  A content file
+describes a tutorial as a sequence of acts, each holding steps that pair one
+teach beat with exactly one action the user has to perform.  ``TutorialContent``
+is the parsed, validated model of such a file; adding a tutorial is a content
+file rather than a code change.  See ``doc/tutorial-mode-design.md`` for the
+design rationale and the verb set.
+
+.. doxygenclass:: TutorialContent
+   :members:
+
+.. doxygenstruct:: TutorialAct
+   :members:
+
+.. doxygenstruct:: TutorialStep
+   :members:
+
+.. doxygenstruct:: TutorialValidator
+   :members:
+
+.. doxygenstruct:: TutorialRule
+   :members:
+
+.. doxygenstruct:: TutorialEditorAction
+   :members:
+
+.. doxygenstruct:: TutorialFeedback
+   :members:
+
+.. doxygenstruct:: TutorialOption
+   :members:
+
+.. doxygenstruct:: TutorialVisual
+   :members:
+
+.. doxygenstruct:: TutorialAttribution
+   :members:
+
+.. doxygenstruct:: ContentIssue
+   :members:
+
+-----
+
+.. doxygenfunction:: parseTutorialJson
+
+.. doxygenfunction:: loadTutorialFile
+
+.. doxygenfunction:: countContentErrors
+
+.. doxygenfunction:: formatContentIssues
+
+-----
+
 Editor Components
 =================
 
