@@ -617,7 +617,7 @@ const TutorialStep *TutorialContent::stepById(const QString &id) const
     return nullptr;
 }
 
-const TutorialConcept *TutorialContent::concept(const QString &id) const
+const TutorialConcept *TutorialContent::conceptFor(const QString &id) const
 {
     const auto it = conceptmap.constFind(id);
     return it == conceptmap.constEnd() ? nullptr : &it.value();

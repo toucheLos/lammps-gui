@@ -9,14 +9,14 @@
 // This software is distributed under the GNU General Public License version 2 or later.
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef TUTORIALEVAL_H
-#define TUTORIALEVAL_H
+#ifndef TUTORIALTEXT_H
+#define TUTORIALTEXT_H
 
 #include <QString>
 #include <QStringList>
 
 /**
- * @file tutorialeval.h
+ * @file tutorialtext.h
  * @brief Text utilities the tutorial mode needs to read and edit LAMMPS input
  *
  * All of these delegate the actual lexing to the syntax engine
@@ -84,7 +84,7 @@ QString rewriteArgument(const QString &line, int argIndex, const QString &value)
  */
 bool findCommandLine(const QString &buffer, const QString &command, int &lineNumber);
 
-#endif // TUTORIALEVAL_H
+#endif // TUTORIALTEXT_H
 
 // Local Variables:
 // c-basic-offset: 4

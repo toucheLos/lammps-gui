@@ -9,7 +9,7 @@
 // This software is distributed under the GNU General Public License version 2 or later.
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include "tutorialeval.h"
+#include "tutorialtext.h"
 
 #include "lammpssyntax.h"
 
@@ -18,42 +18,42 @@
 #include <QString>
 #include <QStringList>
 
-TEST(TutorialEvalTest, CanonicalWordsSplitsOnWhitespace)
+TEST(TutorialTextTest, CanonicalWordsSplitsOnWhitespace)
 {
     EXPECT_EQ(canonicalWords(QStringLiteral("units lj")), (QStringList{"units", "lj"}));
 }
 
-TEST(TutorialEvalTest, CanonicalWordsCollapsesRepeatedWhitespaceAndTabs)
+TEST(TutorialTextTest, CanonicalWordsCollapsesRepeatedWhitespaceAndTabs)
 {
     EXPECT_EQ(canonicalWords(QStringLiteral("  units \t\t  lj   ")), (QStringList{"units", "lj"}));
 }
 
-TEST(TutorialEvalTest, CanonicalWordsStripsTrailingComments)
+TEST(TutorialTextTest, CanonicalWordsStripsTrailingComments)
 {
     EXPECT_EQ(canonicalWords(QStringLiteral("units lj  # reduced units")),
               (QStringList{"units", "lj"}));
 }
 
-TEST(TutorialEvalTest, CanonicalWordsJoinsLineContinuations)
+TEST(TutorialTextTest, CanonicalWordsJoinsLineContinuations)
 {
     EXPECT_EQ(canonicalWords(QStringLiteral("pair_style lj/cut &\n  2.5")),
               (QStringList{"pair_style", "lj/cut", "2.5"}));
 }
 
-TEST(TutorialEvalTest, CanonicalWordsStripsSurroundingQuotes)
+TEST(TutorialTextTest, CanonicalWordsStripsSurroundingQuotes)
 {
     EXPECT_EQ(canonicalWords(QStringLiteral("print \"hello world\"")),
               (QStringList{"print", "hello world"}));
 }
 
-TEST(TutorialEvalTest, CanonicalWordsOnEmptyAndCommentOnlyInput)
+TEST(TutorialTextTest, CanonicalWordsOnEmptyAndCommentOnlyInput)
 {
     EXPECT_TRUE(canonicalWords(QString()).isEmpty());
     EXPECT_TRUE(canonicalWords(QStringLiteral("   ")).isEmpty());
     EXPECT_TRUE(canonicalWords(QStringLiteral("# just a comment")).isEmpty());
 }
 
-TEST(TutorialEvalTest, EquivalentNumberSpellingsCompareEqual)
+TEST(TutorialTextTest, EquivalentNumberSpellingsCompareEqual)
 {
     // the case section 4.4 calls out explicitly
     const QList<QString> spellings = {"2.5", "2.50", "2.5e0", "2.5E0", "2.5d0", "0.25e1"};
@@ -64,7 +64,7 @@ TEST(TutorialEvalTest, EquivalentNumberSpellingsCompareEqual)
     }
 }
 
-TEST(TutorialEvalTest, NegativeAndExponentForms)
+TEST(TutorialTextTest, NegativeAndExponentForms)
 {
     double v = 0.0;
     EXPECT_TRUE(parseLammpsNumber(QStringLiteral("-20"), v));
@@ -75,7 +75,7 @@ TEST(TutorialEvalTest, NegativeAndExponentForms)
     EXPECT_DOUBLE_EQ(v, 1.0e-3);
 }
 
-TEST(TutorialEvalTest, NonNumbersAreRejected)
+TEST(TutorialTextTest, NonNumbersAreRejected)
 {
     double v = 0.0;
     EXPECT_FALSE(parseLammpsNumber(QStringLiteral("lj/cut"), v));
@@ -83,7 +83,7 @@ TEST(TutorialEvalTest, NonNumbersAreRejected)
     EXPECT_FALSE(parseLammpsNumber(QString(), v));
 }
 
-TEST(TutorialEvalTest, SubstitutionDetection)
+TEST(TutorialTextTest, SubstitutionDetection)
 {
     EXPECT_TRUE(hasSubstitution(QStringLiteral("${cut}")));
     EXPECT_TRUE(hasSubstitution(QStringLiteral("$x")));
@@ -95,7 +95,7 @@ TEST(TutorialEvalTest, SubstitutionDetection)
 
 // ---- rewriting one argument in place -------------------------------------
 
-TEST(TutorialEvalTest, RewriteArgumentReplacesOnlyThatArgument)
+TEST(TutorialTextTest, RewriteArgumentReplacesOnlyThatArgument)
 {
     EXPECT_EQ(rewriteArgument(QStringLiteral("timestep 0.005"), 1, QStringLiteral("0.05")),
               QStringLiteral("timestep 0.05"));
@@ -103,7 +103,7 @@ TEST(TutorialEvalTest, RewriteArgumentReplacesOnlyThatArgument)
               QStringLiteral("pair_coeff 2 2 2.0 3.0"));
 }
 
-TEST(TutorialEvalTest, RewriteArgumentKeepsSpacingAndComments)
+TEST(TutorialTextTest, RewriteArgumentKeepsSpacingAndComments)
 {
     // the author's alignment and any trailing comment must survive, or the
     // tutorial reformats the script underneath the user
@@ -112,7 +112,7 @@ TEST(TutorialEvalTest, RewriteArgumentKeepsSpacingAndComments)
         QStringLiteral("timestep   0.02   # stable"));
 }
 
-TEST(TutorialEvalTest, RewriteArgumentLeavesTheLineAloneWhenTheArgumentIsMissing)
+TEST(TutorialTextTest, RewriteArgumentLeavesTheLineAloneWhenTheArgumentIsMissing)
 {
     const QString line = QStringLiteral("run 25000");
     EXPECT_EQ(rewriteArgument(line, 7, QStringLiteral("x")), line);
@@ -121,7 +121,7 @@ TEST(TutorialEvalTest, RewriteArgumentLeavesTheLineAloneWhenTheArgumentIsMissing
 
 // ---- locating a command in a buffer --------------------------------------
 
-TEST(TutorialEvalTest, FindCommandLineReturnsTheZeroBasedLine)
+TEST(TutorialTextTest, FindCommandLineReturnsTheZeroBasedLine)
 {
     const QString buffer = QStringLiteral("units lj\nboundary p p p\ntimestep 0.005\n");
     int line             = -1;
@@ -129,7 +129,7 @@ TEST(TutorialEvalTest, FindCommandLineReturnsTheZeroBasedLine)
     EXPECT_EQ(line, 2);
 }
 
-TEST(TutorialEvalTest, FindCommandLineIgnoresCommentedOccurrences)
+TEST(TutorialTextTest, FindCommandLineIgnoresCommentedOccurrences)
 {
     // a commented-out line is not a command, so it must not be rewritten
     const QString buffer = QStringLiteral("# timestep 0.001\ntimestep 0.005\n");
@@ -138,7 +138,7 @@ TEST(TutorialEvalTest, FindCommandLineIgnoresCommentedOccurrences)
     EXPECT_EQ(line, 1);
 }
 
-TEST(TutorialEvalTest, FindCommandLineReportsAbsence)
+TEST(TutorialTextTest, FindCommandLineReportsAbsence)
 {
     int line = -1;
     EXPECT_FALSE(findCommandLine(QStringLiteral("units lj\n"), QStringLiteral("timestep"), line));

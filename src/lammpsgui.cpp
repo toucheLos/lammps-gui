@@ -33,7 +33,7 @@
 #include "syntaxcheck.h"
 #include "tutorialcontent.h"
 #include "tutorialengine.h"
-#include "tutorialeval.h"
+#include "tutorialtext.h"
 #include "tutorialview.h"
 #include "tutorialwizard.h"
 #include "urldownloader.h"

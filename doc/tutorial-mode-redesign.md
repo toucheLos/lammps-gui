@@ -156,7 +156,8 @@ An `EXPERIMENT` step then: rewrites the bound tokens in the editor buffer, calls
 - **Content:** 32 steps convert. 13 already carry the command in `editor.skeleton` and 17
   carry it in `reveal`, so most conversions are mechanical rather than rewrites.
 - **Code retired:** the verb-mix warning, the non-skippable/reveal rule, and the
-  `ExactTokens`/`TokenPattern`/hole-matching paths in `tutorialeval.cpp`. I propose to
+  `ExactTokens`/`TokenPattern`/hole-matching paths in what is now `tutorialtext.cpp`.  The
+plan was to
   **keep** `canonicalWords()`, `parseLammpsNumber()`, `hasSubstitution()` and choice
   evaluation -- they are still needed for optional predictions and for checking an
   experiment's observation -- and retire the unused paths only once no content uses them,

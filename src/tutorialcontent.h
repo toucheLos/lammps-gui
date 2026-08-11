@@ -261,7 +261,7 @@ public:
      * @param id concept id, as referenced by an annotation
      * @return the concept, or nullptr when the id was never declared
      */
-    const TutorialConcept *concept(const QString &id) const;
+    const TutorialConcept *conceptFor(const QString &id) const;
 
     /** @brief Every concept the tutorial declares, keyed by id */
     const QHash<QString, TutorialConcept> &concepts() const { return conceptmap; }

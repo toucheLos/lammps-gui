@@ -54,11 +54,12 @@ Interactive Tutorial Content
 ----------------------------
 
 The interactive tutorial mode is driven entirely by data.  A content file
-describes a tutorial as a sequence of acts, each holding steps that pair one
-teach beat with exactly one action the user has to perform.  ``TutorialContent``
-is the parsed, validated model of such a file; adding a tutorial is a content
-file rather than a code change.  See ``doc/tutorial-mode-design.md`` for the
-design rationale and the verb set.
+describes a tutorial as a sequence of acts, each holding steps that present
+commands with their annotations or hand the user over to a live simulation
+run.  ``TutorialContent`` is the parsed, validated model of such a file;
+adding a tutorial is a content file rather than a code change.  See
+``doc/tutorial-mode-design.md`` for the reconnaissance behind the feature and
+``doc/tutorial-mode-redesign.md`` for the current step model.
 
 .. doxygenclass:: TutorialContent
    :members:
@@ -69,22 +70,13 @@ design rationale and the verb set.
 .. doxygenstruct:: TutorialStep
    :members:
 
-.. doxygenstruct:: TutorialValidator
+.. doxygenstruct:: CommandLine
    :members:
 
-.. doxygenstruct:: TutorialRule
+.. doxygenstruct:: TokenNote
    :members:
 
-.. doxygenstruct:: TutorialEditorAction
-   :members:
-
-.. doxygenstruct:: TutorialFeedback
-   :members:
-
-.. doxygenstruct:: TutorialOption
-   :members:
-
-.. doxygenstruct:: TutorialVisual
+.. doxygenstruct:: TutorialConcept
    :members:
 
 .. doxygenstruct:: TutorialAttribution

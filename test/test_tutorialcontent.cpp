@@ -290,10 +290,10 @@ TEST(TutorialContentTest, ConceptsAreParsedAndLookedUpById)
         R"({"id":"reduced-units","term":"reduced units","explain":"everything is dimensionless"})"));
 
     ASSERT_EQ(content.concepts().size(), 1);
-    const TutorialConcept *c = content.concept(QStringLiteral("reduced-units"));
+    const TutorialConcept *c = content.conceptFor(QStringLiteral("reduced-units"));
     ASSERT_NE(c, nullptr);
     EXPECT_EQ(c->term, QStringLiteral("reduced units"));
-    EXPECT_EQ(content.concept(QStringLiteral("nope")), nullptr);
+    EXPECT_EQ(content.conceptFor(QStringLiteral("nope")), nullptr);
 }
 
 TEST(TutorialContentTest, AnnotationReferencingAnUndeclaredConceptIsRejected)

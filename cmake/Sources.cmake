@@ -101,8 +101,8 @@ set(PROJECT_SOURCES
   ${CMAKE_SOURCE_DIR}/src/tutorialcontent.h
   ${CMAKE_SOURCE_DIR}/src/tutorialengine.cpp
   ${CMAKE_SOURCE_DIR}/src/tutorialengine.h
-  ${CMAKE_SOURCE_DIR}/src/tutorialeval.cpp
-  ${CMAKE_SOURCE_DIR}/src/tutorialeval.h
+  ${CMAKE_SOURCE_DIR}/src/tutorialtext.cpp
+  ${CMAKE_SOURCE_DIR}/src/tutorialtext.h
   ${CMAKE_SOURCE_DIR}/src/tutorialview.cpp
   ${CMAKE_SOURCE_DIR}/src/tutorialview.h
   ${CMAKE_SOURCE_DIR}/src/tutorialwizard.cpp

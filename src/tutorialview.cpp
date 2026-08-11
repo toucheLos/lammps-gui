@@ -14,7 +14,7 @@
 #include "constants.h"
 #include "helpers.h"
 #include "tutorialengine.h"
-#include "tutorialeval.h"
+#include "tutorialtext.h"
 
 #include <QComboBox>
 #include <QDesktopServices>
@@ -249,7 +249,7 @@ void TutorialView::buildCommandSection()
         if (explain && !note.alternatives.isEmpty())
             body += QStringLiteral("<br><i>%1</i>").arg(note.alternatives.toHtmlEscaped());
         if (explain && !note.conceptId.isEmpty()) {
-            if (const auto *c = engine->content().concept(note.conceptId))
+            if (const auto *c = engine->content().conceptFor(note.conceptId))
                 body += QStringLiteral("<br><small>%1: %2</small>")
                             .arg(c->term.toHtmlEscaped(), c->explain.toHtmlEscaped());
         }

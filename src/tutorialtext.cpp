@@ -9,7 +9,7 @@
 // This software is distributed under the GNU General Public License version 2 or later.
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#include "tutorialeval.h"
+#include "tutorialtext.h"
 
 #include "lammpssyntax.h"
 
