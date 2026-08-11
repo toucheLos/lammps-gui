@@ -50,6 +50,15 @@ const FigureName FIGURE_NAMES[] = {
     {"snapshot", FigureSource::Snapshot},
 };
 
+struct AnchorName {
+    const char *name;
+    StepAnchor anchor;
+};
+const AnchorName ANCHOR_NAMES[] = {
+    {"none", StepAnchor::None},   {"editor", StepAnchor::Editor}, {"run", StepAnchor::Run},
+    {"chart", StepAnchor::Chart}, {"image", StepAnchor::Image},   {"log", StepAnchor::Log},
+};
+
 struct ParamKindName {
     const char *name;
     ParamKind kind;
@@ -121,6 +130,9 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("expect"),
     QStringLiteral("run_after_insert"),
     QStringLiteral("checkpoint"),
+    QStringLiteral("anchor"),
+    QStringLiteral("call_to_action"),
+    QStringLiteral("open_file"),
 };
 const QSet<QString> FIGURE_KEYS  = {QStringLiteral("source"), QStringLiteral("caption")};
 const QSet<QString> COMMAND_KEYS = {
@@ -479,6 +491,15 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("expect"), path, ctx, step.expect);
     readBool(obj, QStringLiteral("checkpoint"), path, ctx, step.checkpoint);
     readBool(obj, QStringLiteral("run_after_insert"), path, ctx, step.runAfterInsert);
+    readString(obj, QStringLiteral("call_to_action"), path, ctx, step.callToAction);
+    readString(obj, QStringLiteral("open_file"), path, ctx, step.openFile);
+
+    QString anchorstr;
+    if (readString(obj, QStringLiteral("anchor"), path, ctx, anchorstr))
+        if (!lookupName(ANCHOR_NAMES, anchorstr, &AnchorName::anchor, step.anchor))
+            ctx.error(sub(path, QStringLiteral("anchor")),
+                      QStringLiteral("unknown anchor \"%1\"; expected one of: %2")
+                          .arg(anchorstr, acceptedNames(ANCHOR_NAMES)));
 
     QString kindstr;
     if (readString(obj, QStringLiteral("kind"), path, ctx, kindstr, true))

@@ -53,6 +53,7 @@ class Preferences;
 class SlideShow;
 class StdCapture;
 class TutorialEngine;
+class TutorialView;
 class TutorialWizard;
 class URLDownloader;
 class WindowLayout;
@@ -633,6 +634,15 @@ private:
      */
     void applyTutorialParameter(const QString &command, int argIndex, const QString &value);
 
+    /**
+     * @brief Open another of the tutorial's input files
+     * @param name file name, relative to the current script's directory
+     *
+     * A tutorial that works through more than one script asks for the next one
+     * by name; nothing happens if it was never downloaded.
+     */
+    void openTutorialFile(const QString &name);
+
     /** @brief Create About/Help menu actions and add them to the menu bar */
     void createAboutMenu();
 
@@ -663,25 +673,28 @@ private:
     /// Drives the interactive tutorial; outlives the panel so closing and
     /// reopening it resumes on the same step.  Null until one is started.
     TutorialEngine *tutorialengine = nullptr;
-    bool dryRunActive              = false; ///< current run is an input check dry run
-    Highlighter *highlighter;               ///< Syntax highlighter for LAMMPS input
-    StdCapture *capturer;                   ///< Captures stdout/stderr from LAMMPS
-    QLabel *status;                         ///< Status bar label for general status
-    QLabel *cpuuse;                         ///< Status bar label for CPU usage
-    int lastCpuBucket;                      ///< Last applied cpuuse color bucket (-1 = none yet)
-    LogWindow *logwindow;                   ///< Window displaying LAMMPS output log
-    ImageViewer *imagewindow;               ///< Window for viewing single images
-    ChartWindow *chartwindow;               ///< Window for displaying charts
-    SlideShow *slideshow;                   ///< Window for image slideshow
-    CommandWindow *commandwindow;           ///< Window with a shell prompt
-    QTimer *logupdater;                     ///< Timer for periodic log updates
-    QLabel *dirstatus;                      ///< Status bar label showing current directory
-    QProgressBar *progress;                 ///< Progress bar for long operations
-    Preferences *prefdialog;                ///< Preferences dialog
-    QLabel *lammpsstatus;                   ///< Status bar label for LAMMPS state
-    QLabel *varwindow;                      ///< Window showing variable definitions
-    TutorialWizard *wizard;                 ///< Tutorial wizard dialog
-    WindowLayout *viewlayout;               ///< Presentation policy for the output windows above
+    /// Drives the tutorial coach mark around the window; owned here so it can
+    /// be torn down with the engine when a new tutorial starts.
+    TutorialView *tutorialview = nullptr;
+    bool dryRunActive          = false; ///< current run is an input check dry run
+    Highlighter *highlighter;           ///< Syntax highlighter for LAMMPS input
+    StdCapture *capturer;               ///< Captures stdout/stderr from LAMMPS
+    QLabel *status;                     ///< Status bar label for general status
+    QLabel *cpuuse;                     ///< Status bar label for CPU usage
+    int lastCpuBucket;                  ///< Last applied cpuuse color bucket (-1 = none yet)
+    LogWindow *logwindow;               ///< Window displaying LAMMPS output log
+    ImageViewer *imagewindow;           ///< Window for viewing single images
+    ChartWindow *chartwindow;           ///< Window for displaying charts
+    SlideShow *slideshow;               ///< Window for image slideshow
+    CommandWindow *commandwindow;       ///< Window with a shell prompt
+    QTimer *logupdater;                 ///< Timer for periodic log updates
+    QLabel *dirstatus;                  ///< Status bar label showing current directory
+    QProgressBar *progress;             ///< Progress bar for long operations
+    Preferences *prefdialog;            ///< Preferences dialog
+    QLabel *lammpsstatus;               ///< Status bar label for LAMMPS state
+    QLabel *varwindow;                  ///< Window showing variable definitions
+    TutorialWizard *wizard;             ///< Tutorial wizard dialog
+    WindowLayout *viewlayout;           ///< Presentation policy for the output windows above
 
     /**
      * @brief Container for inspect dialog widgets

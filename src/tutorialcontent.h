@@ -31,6 +31,22 @@ enum class StepKind : quint8 {
 };
 
 /**
+ * @brief Which part of the GUI a step points the user at
+ *
+ * The tutorial is a guided tour: the callout moves to whatever the step is
+ * talking about and rings it.  Resolved to a live widget when the step opens
+ * rather than stored, because some of these views are destroyed and rebuilt.
+ */
+enum class StepAnchor : quint8 {
+    None,   ///< nothing in particular; the callout parks in the top right
+    Editor, ///< the input script
+    Run,    ///< the Run button
+    Chart,  ///< the charts view
+    Image,  ///< the snapshot image view
+    Log     ///< the output view
+};
+
+/**
  * @brief Where a step's illustration comes from
  *
  * Deliberately never a bundled screenshot of the application itself: those
@@ -173,8 +189,17 @@ struct TutorialStep {
     QList<TutorialParam> params;   ///< Experiment: the knobs
     TutorialPrediction prediction; ///< Experiment: the optional pre-run question
     QString expect;                ///< Experiment: what to look for in the result
-    bool runAfterInsert = false;   ///< Show: offer a run once the lines are in
-    bool checkpoint     = false;   ///< a milestone worth pausing on
+
+    StepAnchor anchor = StepAnchor::None; ///< what the callout points at
+    /// one line telling the user what to do now, shown under the prose; the
+    /// callout carries no code, so this is where "click Run" lives
+    QString callToAction;
+    /// script to open before this step, for a tutorial that works through more
+    /// than one input file; empty leaves the current buffer alone
+    QString openFile;
+
+    bool runAfterInsert = false; ///< Show: offer a run once the lines are in
+    bool checkpoint     = false; ///< a milestone worth pausing on
 };
 
 /**

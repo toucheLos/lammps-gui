@@ -179,6 +179,25 @@ constexpr int TUTORIAL_SCHEMA_VERSION = 2;
 /// is not taught again.
 constexpr int CONCEPT_REMINDER_BUDGET = 3;
 
+// ---- Interactive tutorial coach mark -------------------------------------
+// The callout is a pale, opaque panel that points at whatever part of the GUI
+// the tutorial is talking about, and the same pale yellow rings that target
+// and marks the pending line in the editor.  The colors are fixed rather than
+// taken from the palette: the point is that this layer reads as "not part of
+// the application chrome" in both light and dark themes.
+constexpr int COACH_MARGIN       = 12;  ///< padding inside the callout
+constexpr int COACH_RADIUS       = 8;   ///< corner radius of callout and ring
+constexpr int COACH_TAIL         = 10;  ///< length of the pointer triangle
+constexpr int COACH_BORDER_WIDTH = 2;   ///< outline of the callout
+constexpr int COACH_RING_WIDTH   = 2;   ///< outline of the highlight ring
+constexpr int COACH_RING_INSET   = 4;   ///< how far the ring stands off its target
+constexpr int COACH_WIDTH        = 380; ///< preferred callout width
+constexpr int COACH_MIN_HEIGHT   = 160; ///< shortest the callout may be
+constexpr int COACH_MAX_HEIGHT   = 460; ///< tallest before the body scrolls
+constexpr int COACH_GAP          = 14;  ///< space between callout and its target
+// The colors themselves live in tutorialcoach.h: this header is included by
+// Qt Core only translation units, and QColor would drag QtGui in with it.
+
 // ---- Command window ------------------------------------------------------
 constexpr int COMMAND_SCROLLBACK_LINES = 5000; ///< Lines of transcript kept
 constexpr int COMMAND_HISTORY_MAX      = 200;  ///< Command lines remembered between sessions
@@ -201,6 +220,9 @@ constexpr int ALIASES_DEFAULT_HEIGHT = 420; ///< Default height of the alias dia
 inline const QString MAIN_ICON = QStringLiteral(":/icons/lammps-gui-icon-128x128.png");
 /** path to LAMMPS Icon resource */
 inline const QString LAMMPS_ICON = QStringLiteral(":/icons/lammps-icon-128x128.png");
+/// Object name of the Run button in the status bar, so the interactive
+/// tutorial can find the widget it needs to point at without a stored pointer
+inline const QString RUN_BUTTON_NAME = QStringLiteral("runButton");
 /** path to the command spec table resource for the syntax engine */
 inline const QString SYNTAX_SPEC_TABLE = QStringLiteral(":/command_specs.table");
 

@@ -108,6 +108,34 @@ public:
     void setHighlight(int block, bool error);
 
     /**
+     * @brief Offer a line to the user without committing it
+     * @param text the command an interactive tutorial is proposing
+     *
+     * The line is appended to the buffer and painted in the tutorial's
+     * highlight color to mark it as not yet accepted.  Pressing Tab with the
+     * cursor on it commits it; clearPendingLine() withdraws it again.  Only
+     * one line can be pending at a time; offering a second withdraws the first.
+     */
+    void setPendingLine(const QString &text);
+
+    /**
+     * @brief Accept the pending line, leaving it in the buffer
+     * @return the text that was committed, or an empty string if none was pending
+     */
+    QString commitPendingLine();
+
+    /** @brief Withdraw the pending line, removing it from the buffer */
+    void clearPendingLine();
+
+    /** @brief True while a line is offered but not yet accepted */
+    bool hasPendingLine() const { return pendingLine >= 0; }
+
+signals:
+    /** @brief The user accepted the pending line with Tab */
+    void pendingLineCommitted();
+
+public:
+    /**
      * @brief Enable/disable automatic reformatting on Enter key
      * @param flag true to enable, false to disable
      */
@@ -447,8 +475,12 @@ private:
     /// @brief Overridden index variables by name (only entries where isOverridden() is true)
     QHash<QString, VariableEntry> variableOverrides;
 
-    int highlight;            ///< Current highlighted line number, NO_HIGHLIGHT if none
-    bool highlighterror;      ///< Highlighted line marks an error (red) instead of progress
+    int highlight;       ///< Current highlighted line number, NO_HIGHLIGHT if none
+    bool highlighterror; ///< Highlighted line marks an error (red) instead of progress
+    /// Block number of the line an interactive tutorial has offered but the
+    /// user has not accepted yet; -1 when nothing is pending.  Tab commits it,
+    /// and only while it is set does Tab mean anything other than reformat.
+    int pendingLine = -1;
     bool reformatOnReturn;    ///< Enable auto-reformatting on Enter
     bool automaticCompletion; ///< Enable auto-completion popup
     QString docver;           ///< LAMMPS documentation version string

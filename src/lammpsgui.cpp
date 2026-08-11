@@ -525,22 +525,56 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
         return;
     }
 
-    // the engine outlives the view and is owned by the main window, so closing
-    // the panel and reopening it resumes where the user left off
+    // the engine outlives the tour, so leaving and restarting resumes where
+    // the user left off
+    delete tutorialview;
     delete tutorialengine;
     tutorialengine = new TutorialEngine(content, this);
     tutorialengine->restoreProgress();
 
-    auto *view = new TutorialView(tutorialengine, this);
-    view->setAttribute(Qt::WA_DeleteOnClose);
-    // the script grows as the tutorial goes, so the user finishes holding an
-    // input file they built themselves rather than a transcript
-    connect(view, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);
-    connect(view, &TutorialView::applyParameter, this, &LammpsGui::applyTutorialParameter);
-    connect(view, &TutorialView::runRequested, this, &LammpsGui::runBuffer);
+    tutorialview = new TutorialView(tutorialengine, this);
+
+    // the tour points at real parts of the window, and resolves them freshly
+    // every step: the snapshot viewer in particular is destroyed and rebuilt on
+    // every render, so a cached pointer would dangle
+    tutorialview->setAnchorResolver([this](StepAnchor anchor) -> QWidget * {
+        switch (anchor) {
+            case StepAnchor::Editor:
+                return textEdit;
+            case StepAnchor::Run:
+                return statusbar ? statusbar->findChild<QWidget *>(Cfg::RUN_BUTTON_NAME) : nullptr;
+            case StepAnchor::Chart:
+                return viewlayout ? viewlayout->view(ViewSlot::Chart) : nullptr;
+            case StepAnchor::Image:
+                return viewlayout ? viewlayout->view(ViewSlot::Image) : nullptr;
+            case StepAnchor::Log:
+                return viewlayout ? viewlayout->view(ViewSlot::Log) : nullptr;
+            case StepAnchor::None:
+                break;
+        }
+        return nullptr;
+    });
+
+    // the script grows as the tour goes, so the user finishes holding an input
+    // file they built themselves rather than a transcript
+    connect(tutorialview, &TutorialView::offerCommand, textEdit, &CodeEditor::setPendingLine);
+    connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
+    connect(tutorialview, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);
+    connect(tutorialview, &TutorialView::openFileRequested, this, &LammpsGui::openTutorialFile);
+    connect(textEdit, &CodeEditor::pendingLineCommitted, tutorialview,
+            &TutorialView::commandCommitted);
     connect(tutorialengine, &TutorialEngine::stepChanged, tutorialengine,
             &TutorialEngine::saveProgress);
-    view->show();
+
+    tutorialview->start();
+}
+
+void LammpsGui::openTutorialFile(const QString &name)
+{
+    // tutorial files live beside the script the user is working on
+    const QFileInfo current(currentFile);
+    const QString path = current.absoluteDir().absoluteFilePath(name);
+    if (QFileInfo::exists(path)) openFile(path);
 }
 
 void LammpsGui::applyTutorialParameter(const QString &command, int argIndex, const QString &value)
@@ -624,6 +658,8 @@ void LammpsGui::createStatusBar()
 
     auto *runbtn = new QPushButton(QIcon(":/icons/system-run.svg"), "");
     runbtn->setToolTip("Run LAMMPS on input");
+    // named so the interactive tutorial can find it and point at it
+    runbtn->setObjectName(Cfg::RUN_BUTTON_NAME);
     connect(runbtn, &QPushButton::released, this, &LammpsGui::runBuffer);
     statusbar->addWidget(runbtn);
 

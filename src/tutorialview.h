@@ -12,51 +12,43 @@
 #ifndef TUTORIALVIEW_H
 #define TUTORIALVIEW_H
 
-#include <QList>
+#include "tutorialcoach.h"
+#include "tutorialcontent.h"
+
+#include <QObject>
+
+#include <QPointer>
 #include <QString>
-#include <QWidget>
+#include <functional>
 
 class TutorialEngine;
-struct TutorialParam;
-
-class QAbstractButton;
-class QGroupBox;
-class QLabel;
-class QProgressBar;
-class QPushButton;
-class QTextBrowser;
-class QVBoxLayout;
+class QWidget;
 
 /**
- * @brief Panel that walks the user through one tutorial
+ * @brief Drives the coach mark around the main window
  *
- * The tutorial is a guided walkthrough rather than a quiz: each step shows the
- * commands to write, one line at a time, annotated with what each argument
- * means and what a different value would do.  Insert (or Tab, while the panel
- * has focus) places the line in the script.  Experiment steps replace the
- * command display with parameter widgets and a Run button, so the user changes
- * something and watches the real simulation respond.
+ * Owns the spotlight layer and the callout, resolves each step's anchor to a
+ * live widget, positions the callout beside it, and rings it.  It is a
+ * QObject rather than a widget: the widgets it manages are children of the
+ * main window, and this only decides what they show and where they sit.
  *
- * Annotations fade: a concept is explained in full only while the engine's
- * reminder budget for it lasts, and collapses to a term afterwards.
- *
- * The panel slides in from the top right on the first show and then stays put.
- * That animation is the only one in the application, and it is confined to
- * this class so it can be removed without touching anything else.
+ * Anchors are resolved through the caller's lookup on every step rather than
+ * held as pointers.  The snapshot viewer in particular is deleted and rebuilt
+ * on every render, so a cached pointer would dangle.
  */
-class TutorialView : public QWidget {
+class TutorialView : public QObject {
     Q_OBJECT
 
 public:
     /**
      * @brief Constructor
-     * @param engine Engine driving the tutorial; must outlive this view
-     * @param parent Parent widget
+     * @param engine Engine driving the tutorial; must outlive this
+     * @param host Main window the coach mark lives inside
      */
-    explicit TutorialView(TutorialEngine *engine, QWidget *parent = nullptr);
+    TutorialView(TutorialEngine *engine, QWidget *host);
 
-    /** @brief Destructor */
-    ~TutorialView() override = default;
+    /** @brief Destructor; removes the coach mark from the host */
+    ~TutorialView() override;
 
     TutorialView()                                = delete;
     TutorialView(const TutorialView &)            = delete;
@@ -64,76 +56,72 @@ public:
     TutorialView &operator=(const TutorialView &) = delete;
     TutorialView &operator=(TutorialView &&)      = delete;
 
+    /**
+     * @brief Supply the widget an anchor names
+     * @param resolver called with an anchor, returns the widget to point at
+     *
+     * The caller owns the mapping because only the main window knows where its
+     * views currently live, and whether they exist at all.
+     */
+    void setAnchorResolver(std::function<QWidget *(StepAnchor)> resolver);
+
+    /** @brief Show the coach mark and display the current step */
+    void start();
+
 signals:
     /**
-     * @brief Put a command into the script
-     * @param text the command line to append
+     * @brief Put the step's command into the editor as a pending line
+     * @param text the command to offer
+     *
+     * Pending means visible and highlighted but not yet accepted; the user
+     * commits it with Tab, or it is withdrawn when they move on.
+     */
+    void offerCommand(const QString &text);
+
+    /** @brief Withdraw a pending command that was never committed */
+    void withdrawCommand();
+
+    /**
+     * @brief Put a command straight into the script, already committed
+     * @param text the command to insert
+     *
+     * Used when the user skips ahead: the remaining lines of the step still
+     * have to reach the script, or what they run next would not work.
      */
     void insertCommand(const QString &text);
 
     /**
-     * @brief Rewrite one argument of a command already in the script
-     * @param command command word to find, e.g. "timestep"
-     * @param argIndex 1-based argument position
-     * @param value replacement text
+     * @brief Open a different input file
+     * @param name file name relative to the tutorial's working directory
      */
-    void applyParameter(const QString &command, int argIndex, const QString &value);
+    void openFileRequested(const QString &name);
 
-    /** @brief Run the current script */
-    void runRequested();
+    /** @brief The tour reached its end */
+    void finished();
 
-    /** @brief Render a snapshot of the current system for the figure slot */
-    void snapshotRequested();
-
-protected:
-    /**
-     * @brief Claim Tab as the insert key, but only inside this panel
-     *
-     * The editor binds Tab to reformat-line and Shift+Tab to completion, so
-     * the key can only be taken here, where focus is on the tutorial rather
-     * than on the script.
-     */
-    void keyPressEvent(QKeyEvent *event) override;
-
-    /** @brief Start the slide-in on the first show */
-    void showEvent(QShowEvent *event) override;
+public slots:
+    /** @brief Rebuild the callout from the engine's cursor */
+    void showCurrentStep();
+    /** @brief Reposition the callout; call when the host resizes */
+    void reposition();
+    /** @brief The user committed the pending line, so move on */
+    void commandCommitted();
 
 private slots:
-    void insertNext();      ///< insert the command currently on offer
-    void runExperiment();   ///< apply the parameters and run
-    void openDocs();        ///< open the LAMMPS documentation page for this step
-    void showCurrentStep(); ///< rebuild every widget from the engine's cursor
+    void goNext(); ///< advance, withdrawing anything uncommitted
+    void goBack(); ///< step back, withdrawing anything uncommitted
 
 private:
-    /// build the annotated display of the command on offer
-    void buildCommandSection();
-    /// build the parameter widgets and Run button of an experiment
-    void buildExperimentSection();
     /// render the markdown subset (bold, italic, inline code) as rich text
     static QString renderText(const QString &text);
+    /// the anchor the current step asks for
+    StepAnchor currentAnchor() const;
 
-    TutorialEngine *engine = nullptr; ///< drives the tutorial (not owned)
-
-    QLabel *breadcrumb      = nullptr; ///< act and step position
-    QProgressBar *progress  = nullptr; ///< progress over the whole tutorial
-    QLabel *titleLabel      = nullptr; ///< step title
-    QTextBrowser *teachText = nullptr; ///< the teach beat
-    QLabel *figureLabel     = nullptr; ///< illustration, scaled to fit
-    QLabel *figureCaption   = nullptr; ///< caption under the illustration
-    QGroupBox *stageBox     = nullptr; ///< holds the command or the experiment
-    QVBoxLayout *stageBox_  = nullptr; ///< layout of the stage
-    QPushButton *primary    = nullptr; ///< Insert, or Run on an experiment
-    QPushButton *docsButton = nullptr; ///< open the LAMMPS documentation
-    QPushButton *prevButton = nullptr; ///< step backwards
-    QPushButton *nextButton = nullptr; ///< step forwards
-
-    /// one editable widget per experiment parameter, in declaration order
-    QList<QWidget *> paramWidgets;
-    /// the prediction's answer buttons, empty when the step has no prediction
-    QList<QAbstractButton *> predictionButtons;
-    QLabel *predictionFeedback = nullptr; ///< what the chosen prediction teaches
-
-    bool slidIn = false; ///< the entry animation has already played
+    TutorialEngine *engine = nullptr;             ///< drives the tutorial (not owned)
+    QWidget *host          = nullptr;             ///< main window (not owned)
+    QPointer<TutorialSpotlight> spotlight;        ///< highlight layer, child of host
+    QPointer<TutorialCoach> coach;                ///< the callout, child of the spotlight
+    std::function<QWidget *(StepAnchor)> resolve; ///< anchor lookup
 };
 
 #endif // TUTORIALVIEW_H

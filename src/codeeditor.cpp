@@ -17,6 +17,7 @@
 #include "lammpssyntax.h"
 #include "lammpswrapper.h"
 #include "linenumberarea.h"
+#include "tutorialcoach.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -180,6 +181,53 @@ void CodeEditor::setHighlight(int block, bool error)
 
     // update graphics
     repaint();
+}
+
+// ---- pending tutorial line ------------------------------------------------
+// An interactive tutorial offers a command by putting it in the buffer and
+// marking it; the user accepts it with Tab or moves on and it is withdrawn.
+
+void CodeEditor::setPendingLine(const QString &text)
+{
+    clearPendingLine();
+    if (text.trimmed().isEmpty()) return;
+
+    auto cursor = textCursor();
+    cursor.movePosition(QTextCursor::End);
+    if (!document()->isEmpty() && !document()->lastBlock().text().trimmed().isEmpty())
+        cursor.insertText(QStringLiteral("\n"));
+    cursor.insertText(text);
+
+    pendingLine = document()->blockCount() - 1;
+    setTextCursor(cursor);
+    ensureCursorVisible();
+    viewport()->update();
+}
+
+QString CodeEditor::commitPendingLine()
+{
+    if (pendingLine < 0) return {};
+    const QTextBlock block = document()->findBlockByNumber(pendingLine);
+    const QString text     = block.isValid() ? block.text() : QString();
+    pendingLine            = -1;
+    viewport()->update();
+    emit pendingLineCommitted();
+    return text;
+}
+
+void CodeEditor::clearPendingLine()
+{
+    if (pendingLine < 0) return;
+    const QTextBlock block = document()->findBlockByNumber(pendingLine);
+    pendingLine            = -1;
+    if (block.isValid()) {
+        // take the whole line and the newline that introduced it, so
+        // withdrawing an offer leaves the buffer exactly as it was
+        QTextCursor cursor(block);
+        cursor.select(QTextCursor::BlockUnderCursor);
+        cursor.removeSelectedText();
+    }
+    viewport()->update();
 }
 
 // reformat line
@@ -401,6 +449,14 @@ void CodeEditor::keyPressEvent(QKeyEvent *event)
         }
     }
 
+    // Tab accepts a line an interactive tutorial has offered, but only while
+    // one is pending and the cursor is actually on it.  Everywhere else -- and
+    // whenever no tutorial is running -- Tab still reformats the current line.
+    if (key == Qt::Key_Tab && pendingLine >= 0 && textCursor().blockNumber() == pendingLine) {
+        commitPendingLine();
+        return;
+    }
+
     // reformat current line and consume key event
     if (key == Qt::Key_Tab) {
         reformatCurrentLine();
@@ -541,6 +597,18 @@ bool isMarkedOverride(const QHash<QString, VariableEntry> &overrides,
 
 void CodeEditor::paintEvent(QPaintEvent *event)
 {
+    // the pending line is filled *before* the base class paints, so the text
+    // and its syntax highlighting draw on top of the marker rather than under it
+    if (pendingLine >= 0) {
+        const QTextBlock block = document()->findBlockByNumber(pendingLine);
+        if (block.isValid() && block.isVisible()) {
+            QPainter marker(viewport());
+            const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
+            marker.fillRect(geom.left(), geom.top(), viewport()->width(), geom.height(),
+                            Coach::highlight());
+        }
+    }
+
     QPlainTextEdit::paintEvent(event);
     if (variableOverrides.isEmpty()) return;
 
