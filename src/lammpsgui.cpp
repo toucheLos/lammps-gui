@@ -32,6 +32,7 @@
 #include "stdcapture.h"
 #include "syntaxcheck.h"
 #include "tutorialcontent.h"
+#include "tutorialengine.h"
 #include "tutorialview.h"
 #include "tutorialwizard.h"
 #include "urldownloader.h"
@@ -508,20 +509,52 @@ void LammpsGui::createTutorialMenu()
     // Temporary: the finished feature hangs off the wizard's "Interactive"
     // option rather than a menu entry of its own.
     menu->addSeparator();
-    addMenuAction(menu, ":/icons/tutorial1-logo.png", "&Interactive Tutorial 1 (preview)", "",
-                  [this]() {
-                      QList<ContentIssue> issues;
-                      auto content =
-                          loadTutorialFile(QStringLiteral(":/tutorials/lj-fluid.json"), &issues);
-                      if (content.isEmpty()) {
-                          critical(this, "LAMMPS-GUI Error", "Cannot load the tutorial content:",
-                                   formatContentIssues(issues, 10));
-                          return;
-                      }
-                      auto *view = new TutorialView(content, this);
-                      view->setAttribute(Qt::WA_DeleteOnClose);
-                      view->show();
-                  });
+    addMenuAction(menu, ":/icons/tutorial1-logo.png", "&Interactive Tutorial 1", "", [this]() {
+        startInteractiveTutorial(QStringLiteral(":/tutorials/lj-fluid.json"));
+    });
+}
+
+void LammpsGui::startInteractiveTutorial(const QString &path)
+{
+    QList<ContentIssue> issues;
+    const auto content = loadTutorialFile(path, &issues);
+    if (content.isEmpty()) {
+        critical(this, "LAMMPS-GUI Error",
+                 "Cannot load the tutorial content:", formatContentIssues(issues, 10));
+        return;
+    }
+
+    // the engine outlives the view and is owned by the main window, so closing
+    // the panel and reopening it resumes where the user left off
+    delete tutorialengine;
+    tutorialengine = new TutorialEngine(content, &syntax, this);
+    tutorialengine->restoreProgress();
+
+    auto *view = new TutorialView(tutorialengine, this);
+    view->setAttribute(Qt::WA_DeleteOnClose);
+    // an accepted answer joins the script, so the user finishes the tutorial
+    // holding an input file they actually wrote
+    connect(view, &TutorialView::commandAccepted, this, &LammpsGui::appendTutorialCommand);
+    connect(tutorialengine, &TutorialEngine::stepChanged, tutorialengine,
+            &TutorialEngine::saveProgress);
+    view->show();
+}
+
+void LammpsGui::appendTutorialCommand(const QString &text)
+{
+    if (text.trimmed().isEmpty()) return;
+
+    // append through the editor's own cursor rather than rewriting the buffer,
+    // so undo history and the user's own edits are left intact
+    auto cursor = textEdit->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    if (!textEdit->document()->isEmpty() &&
+        !textEdit->document()->lastBlock().text().trimmed().isEmpty())
+        cursor.insertText(QStringLiteral("\n"));
+    cursor.insertText(text);
+    textEdit->setTextCursor(cursor);
+    // mark the line the tutorial just contributed
+    textEdit->setHighlight(textEdit->document()->blockCount() - 1, false);
 }
 
 void LammpsGui::createAboutMenu()

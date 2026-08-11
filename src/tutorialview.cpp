@@ -13,7 +13,9 @@
 
 #include "constants.h"
 #include "helpers.h"
+#include "tutorialengine.h"
 
+#include <QCheckBox>
 #include <QDesktopServices>
 #include <QFont>
 #include <QFrame>
@@ -41,7 +43,7 @@ QString promptFor(StepVerb verb)
         case StepVerb::Read:
             return QStringLiteral("Read on, then press Next.");
         case StepVerb::Type:
-            return QStringLiteral("Your turn -- type the command in the editor:");
+            return QStringLiteral("Your turn -- write the command:");
         case StepVerb::Fill:
             return QStringLiteral("Your turn -- complete the command:");
         case StepVerb::Fix:
@@ -51,17 +53,31 @@ QString promptFor(StepVerb verb)
         case StepVerb::Tune:
             return QStringLiteral("Change it, re-run, and report what you see:");
         case StepVerb::Inspect:
-            return QStringLiteral("Click each part to see what it does:");
+            return QStringLiteral("Read each part, then press Next:");
+    }
+    return QString();
+}
+
+/// colour a verdict without assuming a light or dark palette
+QString verdictColor(Verdict v)
+{
+    switch (v) {
+        case Verdict::Correct:
+            return QStringLiteral("#2e7d32");
+        case Verdict::Incorrect:
+            return QStringLiteral("#c62828");
+        case Verdict::Unresolved:
+            return QStringLiteral("#ef6c00");
     }
     return QString();
 }
 
 } // namespace
 
-TutorialView::TutorialView(const TutorialContent &content, QWidget *parent) :
-    QWidget(parent), tutorial(content)
+TutorialView::TutorialView(TutorialEngine *engine, QWidget *parent) :
+    QWidget(parent), engine(engine)
 {
-    setWindowTitle(QStringLiteral("LAMMPS-GUI: %1").arg(tutorial.title()));
+    setWindowTitle(QStringLiteral("LAMMPS-GUI: %1").arg(engine->content().title()));
     applyWindowFlags(this);
 
     auto *outer = new QVBoxLayout(this);
@@ -76,7 +92,7 @@ TutorialView::TutorialView(const TutorialContent &content, QWidget *parent) :
     progress = new QProgressBar(this);
     progress->setTextVisible(false);
     progress->setFixedHeight(4);
-    progress->setMaximum(qMax(tutorial.stepCount(), 1));
+    progress->setMaximum(qMax(engine->content().stepCount(), 1));
     outer->addWidget(progress);
 
     auto *rule = new QFrame(this);
@@ -102,7 +118,7 @@ TutorialView::TutorialView(const TutorialContent &content, QWidget *parent) :
 
     // ---- visual slot ----
     // the concept plot, anatomy strip and lattice view arrive in later phases;
-    // until then the panel says what the step asked for rather than pretending
+    // until then the panel names what the step asked for rather than pretending
     visualNote = new QLabel(this);
     visualNote->setAlignment(Qt::AlignCenter);
     visualNote->setFrameShape(QFrame::StyledPanel);
@@ -122,7 +138,10 @@ TutorialView::TutorialView(const TutorialContent &content, QWidget *parent) :
     // ---- feedback ----
     feedback = new QTextBrowser(this);
     feedback->setFrameShape(QFrame::StyledPanel);
-    feedback->setMaximumHeight(Cfg::MINIMUM_HEIGHT / 3);
+    // capped: an empty verdict box must not compete with the teach text for
+    // vertical space, but it still has to hold a real LAMMPS error verbatim
+    feedback->setMinimumHeight(Cfg::MINIMUM_HEIGHT / 5);
+    feedback->setMaximumHeight(Cfg::MINIMUM_HEIGHT / 2);
     outer->addWidget(feedback);
 
     // ---- buttons ----
@@ -141,32 +160,34 @@ TutorialView::TutorialView(const TutorialContent &content, QWidget *parent) :
     auto *nav  = new QHBoxLayout;
     prevButton = new QPushButton(QStringLiteral("< &Back"), this);
     nextButton = new QPushButton(QStringLiteral("&Next >"), this);
+    expertBox  = new QCheckBox(QStringLiteral("&Expert mode (checkpoints only)"), this);
+    expertBox->setToolTip(QStringLiteral("Stop only at the checkpoints. Nothing is hidden; "
+                                         "you simply stop being asked."));
     nav->addWidget(prevButton);
-    nav->addStretch(1);
+    nav->addWidget(expertBox, 1, Qt::AlignHCenter);
     nav->addWidget(nextButton);
     outer->addLayout(nav);
 
-    connect(nextButton, &QPushButton::clicked, this, &TutorialView::nextStep);
-    connect(prevButton, &QPushButton::clicked, this, &TutorialView::previousStep);
-    connect(skipButton, &QPushButton::clicked, this, &TutorialView::skipStep);
+    connect(nextButton, &QPushButton::clicked, engine, &TutorialEngine::next);
+    connect(prevButton, &QPushButton::clicked, engine, &TutorialEngine::previous);
+    connect(skipButton, &QPushButton::clicked, engine, &TutorialEngine::skip);
+    connect(checkButton, &QPushButton::clicked, this, &TutorialView::checkAnswer);
     connect(hintButton, &QPushButton::clicked, this, &TutorialView::requestHint);
     connect(docsButton, &QPushButton::clicked, this, &TutorialView::openDocs);
-    // validation is not wired yet: the evaluator lands with the phase 2 engine
-    connect(checkButton, &QPushButton::clicked, this, &TutorialView::nextStep);
+    connect(expertBox, &QCheckBox::toggled, this, &TutorialView::toggleExpert);
+    connect(engine, &TutorialEngine::stepChanged, this, &TutorialView::showCurrentStep);
 
     resize(Cfg::MINIMUM_WIDTH, Cfg::MAIN_DEFAULT_HEIGHT);
+    expertBox->setChecked(engine->expertMode());
     showCurrentStep();
 }
 
-const TutorialStep *TutorialView::currentStep() const
-{
-    return tutorial.step(actIndex, stepIndex);
-}
+/* -------------------------------------------------------------------- */
 
 QString TutorialView::renderTeachText(const QString &text)
 {
-    // the authored subset is bold, italic, inline code and paragraphs; anything
-    // else stays literal, so a content file can never inject markup
+    // the authored subset is bold, italic, inline code and paragraphs; escaping
+    // first means a content file can never inject markup of its own
     QString out = text.toHtmlEscaped();
     out.replace(QRegularExpression(QStringLiteral("\\*\\*([^*]+)\\*\\*")),
                 QStringLiteral("<b>\\1</b>"));
@@ -182,45 +203,43 @@ QString TutorialView::renderTeachText(const QString &text)
 
 void TutorialView::showCurrentStep()
 {
-    hintsShown = 0;
-
-    // clear whatever the previous step put in the prompt area
+    // drop whatever the previous step put in the prompt area
+    holeEdits.clear();
+    optionButtons.clear();
+    lineEdit = nullptr;
     while (QLayoutItem *item = promptBox->takeAt(0)) {
         delete item->widget();
         delete item;
     }
 
-    const TutorialStep *step = currentStep();
+    const TutorialStep *step = engine->currentStep();
     if (!step) {
+        breadcrumb->setText(engine->content().title());
+        progress->setValue(progress->maximum());
         titleLabel->setText(QStringLiteral("Tutorial complete"));
-        teachText->setHtml(QStringLiteral("<p>You reached the end of the tutorial.</p>"));
-        breadcrumb->clear();
+        teachText->setHtml(QStringLiteral(
+            "<p>That is the end of the tutorial. The script in the editor is yours -- "
+            "you wrote it. Keep experimenting with it.</p>"));
         visualNote->hide();
         promptLabel->clear();
         feedback->clear();
-        checkButton->setEnabled(false);
-        hintButton->setEnabled(false);
-        skipButton->setEnabled(false);
-        nextButton->setEnabled(false);
+        for (auto *b : {checkButton, hintButton, skipButton, docsButton, nextButton})
+            b->setEnabled(false);
+        prevButton->setEnabled(true);
         return;
     }
 
-    // how many steps precede this one, for the breadcrumb and the bar
-    int done = 0;
-    for (int a = 0; a < actIndex; ++a)
-        done += static_cast<int>(tutorial.acts().at(a).steps.size());
-    done += stepIndex;
-
-    const auto &act = tutorial.acts().at(actIndex);
+    const auto &acts = engine->content().acts();
+    const auto &act  = acts.at(engine->actIndex());
     breadcrumb->setText(QStringLiteral("%1  -  Act %2/%3: %4  -  Step %5/%6%7")
-                            .arg(tutorial.title())
-                            .arg(actIndex + 1)
-                            .arg(tutorial.actCount())
+                            .arg(engine->content().title())
+                            .arg(engine->actIndex() + 1)
+                            .arg(engine->content().actCount())
                             .arg(act.title)
-                            .arg(stepIndex + 1)
+                            .arg(engine->stepIndex() + 1)
                             .arg(act.steps.size())
                             .arg(step->checkpoint ? QStringLiteral("   [checkpoint]") : QString()));
-    progress->setValue(done + 1);
+    progress->setValue(engine->stepsCompleted() + 1);
 
     titleLabel->setText(QStringLiteral("[%1]  %2").arg(stepVerbName(step->verb), step->title));
     teachText->setHtml(renderTeachText(step->teach));
@@ -241,110 +260,190 @@ void TutorialView::showCurrentStep()
 
     promptLabel->setText(promptFor(step->verb));
 
-    // the prompt itself: options for a prediction, an editable skeleton for a
-    // fill or a repair, and nothing at all for a step with no user action
+    const QFont mono = monoFontFromSettings();
     if (step->verb == StepVerb::Predict) {
-        for (const auto &option : step->options)
-            promptBox->addWidget(new QRadioButton(option.text, promptArea));
-    } else if (!step->editor.skeleton.isEmpty()) {
-        auto *line = new QLineEdit(step->editor.skeleton, promptArea);
-        line->setFont(monoFontFromSettings());
-        line->setReadOnly(step->verb == StepVerb::Inspect);
-        promptBox->addWidget(line);
-        if (step->editor.holeCount() > 0) {
-            // put the cursor on the hole the author wants filled first
-            const int pos = step->editor.skeleton.indexOf(HOLE);
-            if (pos >= 0) {
-                line->setSelection(pos, static_cast<int>(HOLE.size()));
-                line->setFocus();
+        for (const auto &option : step->options) {
+            auto *button = new QRadioButton(option.text, promptArea);
+            promptBox->addWidget(button);
+            optionButtons.append(button);
+        }
+    } else if (step->editor.holeCount() > 0) {
+        // one field per hole, so a rejection can point at the hole that is wrong
+        const QStringList parts = step->editor.skeleton.split(HOLE);
+        auto *row               = new QWidget(promptArea);
+        auto *rowbox            = new QHBoxLayout(row);
+        rowbox->setContentsMargins(0, 0, 0, 0);
+        for (int i = 0; i < parts.size(); ++i) {
+            if (!parts.at(i).trimmed().isEmpty()) {
+                auto *fixed = new QLabel(parts.at(i).trimmed(), row);
+                fixed->setFont(mono);
+                rowbox->addWidget(fixed);
+            }
+            if (i + 1 < parts.size()) {
+                auto *edit = new QLineEdit(row);
+                edit->setFont(mono);
+                edit->setPlaceholderText(step->validate.rules.value(i).label.isEmpty()
+                                             ? QStringLiteral("?")
+                                             : step->validate.rules.value(i).label);
+                connect(edit, &QLineEdit::returnPressed, this, &TutorialView::checkAnswer);
+                rowbox->addWidget(edit);
+                holeEdits.append(edit);
             }
         }
-    } else if (step->verb == StepVerb::Type) {
-        auto *line = new QLineEdit(promptArea);
-        line->setFont(monoFontFromSettings());
-        line->setPlaceholderText(QStringLiteral("type the command here"));
-        promptBox->addWidget(line);
+        rowbox->addStretch(1);
+        promptBox->addWidget(row);
+        if (!holeEdits.isEmpty())
+            holeEdits.at(qBound(0, step->editor.focusPlaceholder, holeEdits.size() - 1))
+                ->setFocus();
+    } else if (step->verb == StepVerb::Type || step->verb == StepVerb::Fix ||
+               step->verb == StepVerb::Inspect) {
+        lineEdit = new QLineEdit(promptArea);
+        lineEdit->setFont(mono);
+        // a FIX shows the broken command to repair; a TYPE must never show the
+        // answer, or it stops being anything but transcription
+        if (step->verb != StepVerb::Type) lineEdit->setText(step->editor.skeleton);
+        if (step->verb == StepVerb::Inspect) lineEdit->setReadOnly(true);
+        if (step->verb == StepVerb::Type)
+            lineEdit->setPlaceholderText(QStringLiteral("type the command here"));
+        connect(lineEdit, &QLineEdit::returnPressed, this, &TutorialView::checkAnswer);
+        promptBox->addWidget(lineEdit);
+        lineEdit->setFocus();
     }
 
-    feedback->setHtml(QStringLiteral("<i>Answer checking arrives with the phase 2 engine; "
-                                     "Check currently just advances.</i>"));
+    feedback->clear();
+    if (!engine->canCheckNow() && step->verb != StepVerb::Read && step->verb != StepVerb::Inspect) {
+        feedback->setHtml(
+            QStringLiteral("<i>This step is judged by LAMMPS itself, which is not wired up "
+                           "yet. Use Next or Skip to carry on.</i>"));
+    }
 
-    const bool gated = step->verb != StepVerb::Read && step->verb != StepVerb::Inspect;
-    checkButton->setEnabled(gated);
-    hintButton->setEnabled(!step->hints.isEmpty());
-    // Skip is always offered on a gated step, and nothing about skipping is punished
-    skipButton->setEnabled(gated && step->skippable);
+    checkButton->setEnabled(engine->canCheckNow());
+    hintButton->setEnabled(engine->hasMoreHints() || engine->revealAvailable());
+    skipButton->setEnabled(step->skippable);
     docsButton->setEnabled(!step->docCommand.isEmpty());
-    prevButton->setEnabled(actIndex > 0 || stepIndex > 0);
+    prevButton->setEnabled(engine->stepsCompleted() > 0);
     nextButton->setEnabled(true);
 }
 
-void TutorialView::nextStep()
+/* -------------------------------------------------------------------- */
+
+QString TutorialView::assembledLine() const
 {
-    if (!currentStep()) return;
-    const auto &act = tutorial.acts().at(actIndex);
-    if (stepIndex + 1 < act.steps.size()) {
-        ++stepIndex;
-    } else if (actIndex + 1 < tutorial.actCount()) {
-        ++actIndex;
-        stepIndex = 0;
-    } else {
-        // past the last step: showCurrentStep() renders the completion state
-        ++stepIndex;
-    }
-    showCurrentStep();
+    if (lineEdit) return lineEdit->text();
+    return QString();
 }
 
-void TutorialView::previousStep()
+QStringList TutorialView::holeValues() const
 {
-    if (stepIndex > 0) {
-        --stepIndex;
-    } else if (actIndex > 0) {
-        --actIndex;
-        stepIndex = qMax(static_cast<int>(tutorial.acts().at(actIndex).steps.size()) - 1, 0);
-    } else {
-        return;
-    }
-    showCurrentStep();
+    QStringList out;
+    for (const auto *edit : holeEdits)
+        out << edit->text();
+    return out;
 }
 
-void TutorialView::skipStep()
+int TutorialView::selectedOption() const
 {
-    nextStep();
+    for (int i = 0; i < optionButtons.size(); ++i)
+        if (optionButtons.at(i)->isChecked()) return i;
+    return -1;
+}
+
+void TutorialView::checkAnswer()
+{
+    const TutorialStep *step = engine->currentStep();
+    if (!step || !engine->canCheckNow()) return;
+
+    StepResult result;
+    if (step->verb == StepVerb::Predict) {
+        result = engine->submitChoice(selectedOption());
+    } else if (!holeEdits.isEmpty()) {
+        result = engine->submitHoles(holeValues());
+    } else {
+        result = engine->submitLine(assembledLine());
+    }
+    showVerdict(result);
+
+    if (result.verdict == Verdict::Correct) {
+        // the accepted command joins the script, so the user ends the tutorial
+        // holding a real input file they wrote themselves
+        if (step->verb == StepVerb::Fill) {
+            QString line           = step->editor.skeleton;
+            const QStringList vals = holeValues();
+            for (const auto &v : vals)
+                line.replace(line.indexOf(HOLE), HOLE.size(), v);
+            emit commandAccepted(line);
+        } else if (step->verb == StepVerb::Type) {
+            emit commandAccepted(assembledLine());
+        }
+        if (step->advance == AdvanceMode::Auto) engine->next();
+    }
+
+    // a fresh wrong attempt may have earned the reveal
+    hintButton->setEnabled(engine->hasMoreHints() || engine->revealAvailable());
+}
+
+void TutorialView::showVerdict(const StepResult &result)
+{
+    const TutorialStep *step = engine->currentStep();
+    QString html;
+
+    static const QHash<int, QString> headline = {
+        {static_cast<int>(Verdict::Correct), QStringLiteral("Correct")},
+        {static_cast<int>(Verdict::Incorrect), QStringLiteral("Not yet")},
+        {static_cast<int>(Verdict::Unresolved), QStringLiteral("Cannot tell")},
+    };
+
+    html +=
+        QStringLiteral("<p style=\"color:%1;\"><b>%2</b></p>")
+            .arg(verdictColor(result.verdict), headline.value(static_cast<int>(result.verdict)));
+
+    // the generated explanation names the argument at fault; the authored text
+    // says what it means.  Both matter, and they are not the same thing.
+    if (!result.message.isEmpty())
+        html += QStringLiteral("<p>%1</p>").arg(result.message.toHtmlEscaped());
+    if (!result.feedback.isEmpty())
+        html += QStringLiteral("<p>%1</p>").arg(renderTeachText(result.feedback));
+
+    if (step && result.verdict == Verdict::Incorrect && engine->revealAvailable() &&
+        !step->reveal.isEmpty())
+        html += QStringLiteral("<p><i>Stuck? Press Hint to see the answer.</i></p>");
+
+    feedback->setHtml(html);
 }
 
 void TutorialView::requestHint()
 {
-    const TutorialStep *step = currentStep();
+    const TutorialStep *step = engine->currentStep();
     if (!step) return;
 
-    QString shown;
-    if (hintsShown < step->hints.size()) {
-        ++hintsShown;
-        for (int i = 0; i < hintsShown; ++i)
-            shown +=
-                QStringLiteral("<p>%1. %2</p>").arg(i + 1).arg(step->hints.at(i).toHtmlEscaped());
-        if (hintsShown == step->hints.size() && !step->reveal.isEmpty())
-            shown += QStringLiteral("<p><i>Press Hint once more to reveal the answer.</i></p>");
-    } else if (!step->reveal.isEmpty()) {
-        // the reveal explains rather than just naming the string
-        for (int i = 0; i < step->hints.size(); ++i)
-            shown +=
-                QStringLiteral("<p>%1. %2</p>").arg(i + 1).arg(step->hints.at(i).toHtmlEscaped());
-        shown += QStringLiteral("<p><b>Answer:</b> %1</p>").arg(renderTeachText(step->reveal));
+    QString html;
+    const QStringList shown = engine->nextHint();
+    for (int i = 0; i < shown.size(); ++i)
+        html += QStringLiteral("<p>%1. %2</p>").arg(i + 1).arg(shown.at(i).toHtmlEscaped());
+
+    if (engine->revealAvailable() && !step->reveal.isEmpty()) {
+        // the reveal explains, rather than just naming the string
+        html += QStringLiteral("<p><b>Answer:</b> %1</p>").arg(renderTeachText(step->reveal));
+        hintButton->setEnabled(false);
+    } else if (!engine->hasMoreHints()) {
         hintButton->setEnabled(false);
     }
-    feedback->setHtml(shown);
+    feedback->setHtml(html);
 }
 
 void TutorialView::openDocs()
 {
-    const TutorialStep *step = currentStep();
+    const TutorialStep *step = engine->currentStep();
     if (!step || step->docCommand.isEmpty()) return;
     // the help index maps a command and optional style to a page; until that
     // lookup is factored out of CodeEditor, link to the command's own page
     const QString page = QStringLiteral("%1.html").arg(step->docCommand);
     QDesktopServices::openUrl(QUrl(QStringLiteral("%1/%2").arg(Cfg::DOCS_URL, page)));
+}
+
+void TutorialView::toggleExpert()
+{
+    engine->setExpertMode(expertBox->isChecked());
 }
 
 // Local Variables:
