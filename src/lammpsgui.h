@@ -621,6 +621,18 @@ private:
      */
     void appendTutorialCommand(const QString &text);
 
+    /**
+     * @brief Rewrite one argument of a command in the editor buffer
+     * @param command command word to find, e.g. "timestep"
+     * @param argIndex 1-based argument position
+     * @param value replacement text
+     *
+     * Used by an interactive tutorial's experiment step, which binds a widget
+     * to one argument of one command and re-runs the script after changing it.
+     * Does nothing when the command is not in the buffer.
+     */
+    void applyTutorialParameter(const QString &command, int argIndex, const QString &value);
+
     /** @brief Create About/Help menu actions and add them to the menu bar */
     void createAboutMenu();
 

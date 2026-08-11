@@ -12,36 +12,37 @@
 #ifndef TUTORIALVIEW_H
 #define TUTORIALVIEW_H
 
-#include "tutorialeval.h"
-
 #include <QList>
+#include <QString>
 #include <QWidget>
 
 class TutorialEngine;
+struct TutorialParam;
 
-class QCheckBox;
+class QAbstractButton;
+class QGroupBox;
 class QLabel;
-class QLineEdit;
 class QProgressBar;
 class QPushButton;
-class QRadioButton;
 class QTextBrowser;
 class QVBoxLayout;
 
 /**
- * @brief Panel that presents one interactive tutorial step at a time
+ * @brief Panel that walks the user through one tutorial
  *
- * Lays out the step top to bottom: a breadcrumb with a progress bar, the step
- * title, the teach text, a slot for an auxiliary visual, the prompt and its
- * input, a feedback area, and the navigation buttons.
+ * The tutorial is a guided walkthrough rather than a quiz: each step shows the
+ * commands to write, one line at a time, annotated with what each argument
+ * means and what a different value would do.  Insert (or Tab, while the panel
+ * has focus) places the line in the script.  Experiment steps replace the
+ * command display with parameter widgets and a Run button, so the user changes
+ * something and watches the real simulation respond.
  *
- * The panel is never modal.  The user can edit the script, run it, and wander
- * off at any point, and every step carries a visible Skip control -- the
- * tutorial is for a volunteer adult learner, so engagement comes from the
- * shape of the task rather than from taking control away.
+ * Annotations fade: a concept is explained in full only while the engine's
+ * reminder budget for it lasts, and collapses to a term afterwards.
  *
- * All judging and cursor movement belongs to TutorialEngine; this class only
- * collects what the user entered, hands it over, and renders the verdict.
+ * The panel slides in from the top right on the first show and then stays put.
+ * That animation is the only one in the application, and it is confined to
+ * this class so it can be removed without touching anything else.
  */
 class TutorialView : public QWidget {
     Q_OBJECT
@@ -49,8 +50,7 @@ class TutorialView : public QWidget {
 public:
     /**
      * @brief Constructor
-     * @param engine Engine driving the tutorial; must outlive this view and
-     *               is reparented to it when it has no parent of its own
+     * @param engine Engine driving the tutorial; must outlive this view
      * @param parent Parent widget
      */
     explicit TutorialView(TutorialEngine *engine, QWidget *parent = nullptr);
@@ -66,58 +66,74 @@ public:
 
 signals:
     /**
-     * @brief An answer was accepted and should be added to the script
-     * @param text the accepted command line
-     *
-     * The main window appends it to the editor, so the tutorial builds a real,
-     * runnable input file rather than a transcript.
+     * @brief Put a command into the script
+     * @param text the command line to append
      */
-    void commandAccepted(const QString &text);
+    void insertCommand(const QString &text);
+
+    /**
+     * @brief Rewrite one argument of a command already in the script
+     * @param command command word to find, e.g. "timestep"
+     * @param argIndex 1-based argument position
+     * @param value replacement text
+     */
+    void applyParameter(const QString &command, int argIndex, const QString &value);
+
+    /** @brief Run the current script */
+    void runRequested();
+
+    /** @brief Render a snapshot of the current system for the figure slot */
+    void snapshotRequested();
+
+protected:
+    /**
+     * @brief Claim Tab as the insert key, but only inside this panel
+     *
+     * The editor binds Tab to reformat-line and Shift+Tab to completion, so
+     * the key can only be taken here, where focus is on the tutorial rather
+     * than on the script.
+     */
+    void keyPressEvent(QKeyEvent *event) override;
+
+    /** @brief Start the slide-in on the first show */
+    void showEvent(QShowEvent *event) override;
 
 private slots:
-    void checkAnswer();     ///< judge whatever the prompt currently holds
-    void requestHint();     ///< reveal the next rung of the hint ladder
+    void insertNext();      ///< insert the command currently on offer
+    void runExperiment();   ///< apply the parameters and run
     void openDocs();        ///< open the LAMMPS documentation page for this step
-    void toggleExpert();    ///< switch between every step and checkpoints only
     void showCurrentStep(); ///< rebuild every widget from the engine's cursor
 
 private:
-    /// the text the user has entered, assembled from the prompt widgets
-    QString assembledLine() const;
-    /// the values entered into the skeleton's "___" holes, in order
-    QStringList holeValues() const;
-    /// index of the selected option, or -1
-    int selectedOption() const;
-    /// render the verdict, its explanation, and the authored feedback
-    void showVerdict(const StepResult &result);
+    /// build the annotated display of the command on offer
+    void buildCommandSection();
+    /// build the parameter widgets and Run button of an experiment
+    void buildExperimentSection();
     /// render the markdown subset (bold, italic, inline code) as rich text
-    static QString renderTeachText(const QString &text);
+    static QString renderText(const QString &text);
 
     TutorialEngine *engine = nullptr; ///< drives the tutorial (not owned)
 
-    QLabel *breadcrumb       = nullptr; ///< "Tutorial 1 - Act 2 - Step 3/7"
-    QProgressBar *progress   = nullptr; ///< thin progress bar over the whole tutorial
-    QLabel *titleLabel       = nullptr; ///< step title
-    QTextBrowser *teachText  = nullptr; ///< the teach beat
-    QLabel *visualNote       = nullptr; ///< placeholder naming the visual a step asks for
-    QLabel *promptLabel      = nullptr; ///< "Your turn:" and what to do
-    QWidget *promptArea      = nullptr; ///< holds the inline inputs or the option buttons
-    QVBoxLayout *promptBox   = nullptr; ///< layout of the prompt area
-    QTextBrowser *feedback   = nullptr; ///< verdict, explanation, and authored text
-    QCheckBox *expertBox     = nullptr; ///< checkpoints-only toggle
-    QPushButton *checkButton = nullptr; ///< primary action; Enter is bound to it
-    QPushButton *hintButton  = nullptr; ///< progressive hint ladder
-    QPushButton *skipButton  = nullptr; ///< always present, never punished
-    QPushButton *docsButton  = nullptr; ///< open the LAMMPS documentation
-    QPushButton *prevButton  = nullptr; ///< step backwards
-    QPushButton *nextButton  = nullptr; ///< step forwards
+    QLabel *breadcrumb      = nullptr; ///< act and step position
+    QProgressBar *progress  = nullptr; ///< progress over the whole tutorial
+    QLabel *titleLabel      = nullptr; ///< step title
+    QTextBrowser *teachText = nullptr; ///< the teach beat
+    QLabel *figureLabel     = nullptr; ///< illustration, scaled to fit
+    QLabel *figureCaption   = nullptr; ///< caption under the illustration
+    QGroupBox *stageBox     = nullptr; ///< holds the command or the experiment
+    QVBoxLayout *stageBox_  = nullptr; ///< layout of the stage
+    QPushButton *primary    = nullptr; ///< Insert, or Run on an experiment
+    QPushButton *docsButton = nullptr; ///< open the LAMMPS documentation
+    QPushButton *prevButton = nullptr; ///< step backwards
+    QPushButton *nextButton = nullptr; ///< step forwards
 
-    /// one editable field per "___" hole, empty for a whole-line prompt
-    QList<QLineEdit *> holeEdits;
-    /// the single field a TYPE or FIX step types into, null otherwise
-    QLineEdit *lineEdit = nullptr;
-    /// the option buttons of a PREDICT step, empty otherwise
-    QList<QRadioButton *> optionButtons;
+    /// one editable widget per experiment parameter, in declaration order
+    QList<QWidget *> paramWidgets;
+    /// the prediction's answer buttons, empty when the step has no prediction
+    QList<QAbstractButton *> predictionButtons;
+    QLabel *predictionFeedback = nullptr; ///< what the chosen prediction teaches
+
+    bool slidIn = false; ///< the entry animation has already played
 };
 
 #endif // TUTORIALVIEW_H

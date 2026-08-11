@@ -16,41 +16,40 @@
 
 #include <gtest/gtest.h>
 
-#include <QCoreApplication>
 #include <QSettings>
 #include <QTemporaryDir>
 
 namespace {
 
-/// a four-step tutorial: two ordinary steps, a checkpoint, and a final step
+/// a three-step tutorial: two shows (one with two commands) and an experiment
 QByteArray stubDocument()
 {
     return QByteArray(R"({
-      "schema_version": 1, "id": "stub", "title": "Stub",
+      "schema_version": 2, "id": "stub", "title": "Stub",
       "attribution": { "license": "test" },
+      "concepts": [
+        { "id": "units", "term": "reduced units", "explain": "dimensionless" },
+        { "id": "seed", "term": "random seed", "explain": "fixes the sequence" }
+      ],
       "acts": [
         { "id": "a1", "title": "First", "steps": [
-          { "id": "s1", "verb": "TYPE", "title": "Units", "teach": "t",
-            "hints": ["first nudge", "second nudge"],
-            "reveal": "units lj -- reduced units",
-            "validate": { "type": "exact_tokens",
-                          "rules": [ { "type": "exact", "text": "units" },
-                                     { "type": "exact", "text": "lj" } ] },
-            "feedback": { "correct": "well done", "wrong": "not that" } },
-          { "id": "s2", "verb": "FILL", "title": "Cutoff", "teach": "t",
-            "editor": { "skeleton": "pair_style lj/cut ___" },
-            "validate": { "type": "numeric_range",
-                          "rules": [ { "type": "numeric_range", "min": 2.0, "max": 5.0,
-                                       "ideal": 2.5 } ] },
-            "feedback": { "below": "too short", "above": "wasteful" } }
+          { "id": "s1", "kind": "SHOW", "title": "Units", "teach": "t",
+            "commands": [
+              { "text": "units lj", "explain": "reduced units", "concept": "units" },
+              { "text": "boundary p p p", "explain": "periodic" }
+            ] },
+          { "id": "s2", "kind": "SHOW", "title": "Atoms", "teach": "t",
+            "commands": [
+              { "text": "timestep 0.005", "explain": "small steps",
+                "notes": [ { "arg": 1, "note": "the step", "concept": "seed" } ] }
+            ] }
         ] },
         { "id": "a2", "title": "Second", "steps": [
-          { "id": "s3", "verb": "READ", "title": "Checkpoint", "teach": "t",
-            "checkpoint": true },
-          { "id": "s4", "verb": "PREDICT", "title": "Guess", "teach": "t",
-            "options": [ { "text": "no", "feedback": "because no" },
-                         { "text": "yes", "feedback": "because yes" } ],
-            "validate": { "type": "choice", "correct_option": 1 } }
+          { "id": "s3", "kind": "EXPERIMENT", "title": "Push it", "teach": "t",
+            "checkpoint": true,
+            "params": [ { "id": "dt", "label": "timestep", "command": "timestep", "arg": 1,
+                          "min": 0.001, "max": 0.06, "step": 0.005, "initial": 0.005 } ],
+            "expect": "the energy trace" }
         ] }
       ]
     })");
@@ -98,14 +97,13 @@ TEST(TutorialEngineTest, StartsOnTheFirstStep)
     TutorialEngine engine(stubContent());
     ASSERT_NE(engine.currentStep(), nullptr);
     EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s1"));
-    EXPECT_EQ(engine.stepsCompleted(), 0);
     EXPECT_FALSE(engine.isFinished());
 }
 
-TEST(TutorialEngineTest, NextWalksAcrossActBoundaries)
+TEST(TutorialEngineTest, NextWalksAcrossActBoundariesAndFinishes)
 {
     TutorialEngine engine(stubContent());
-    const QStringList expected = {"s1", "s2", "s3", "s4"};
+    const QStringList expected = {"s1", "s2", "s3"};
     for (const auto &id : expected) {
         ASSERT_NE(engine.currentStep(), nullptr) << qPrintable(id);
         EXPECT_EQ(engine.currentStep()->id, id);
@@ -118,12 +116,9 @@ TEST(TutorialEngineTest, PreviousWalksBackAcrossActBoundaries)
 {
     TutorialEngine engine(stubContent());
     engine.next();
-    engine.next(); // s3, first step of act 2
-    ASSERT_NE(engine.currentStep(), nullptr);
+    engine.next();
     EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s3"));
-
     engine.previous();
-    ASSERT_NE(engine.currentStep(), nullptr);
     EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s2"));
 }
 
@@ -140,231 +135,166 @@ TEST(TutorialEngineTest, FinishingEmitsTheFinishedSignal)
 {
     TutorialEngine engine(stubContent());
     SignalCounter spy(&engine, &TutorialEngine::tutorialFinished);
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 3; ++i)
         engine.next();
-    EXPECT_TRUE(engine.isFinished());
     EXPECT_EQ(spy.count(), 1);
 }
 
 TEST(TutorialEngineTest, GoToStepJumpsByIdAndIgnoresUnknownIds)
 {
     TutorialEngine engine(stubContent());
-    engine.goToStep(QStringLiteral("s4"));
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s4"));
-
+    engine.goToStep(QStringLiteral("s3"));
+    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s3"));
     engine.goToStep(QStringLiteral("nonexistent"));
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s4"));
+    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s3"));
 }
 
-// ---- skipping is free ----------------------------------------------------
+// ---- commands are offered one at a time ----------------------------------
 
-TEST(TutorialEngineTest, SkipAdvancesAndCostsNothing)
+TEST(TutorialEngineTest, CommandsAreHandedOutInOrder)
 {
     TutorialEngine engine(stubContent());
-    engine.submitLine(QStringLiteral("units real")); // one wrong attempt
-    EXPECT_EQ(engine.attempts(), 1);
+    ASSERT_NE(engine.nextCommand(), nullptr);
+    EXPECT_EQ(engine.nextCommand()->text, QStringLiteral("units lj"));
+    EXPECT_FALSE(engine.allCommandsInserted());
 
-    engine.skip();
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s2"));
-    // the new step starts clean; nothing about having skipped is carried over
-    EXPECT_EQ(engine.attempts(), 0);
-    EXPECT_EQ(engine.hintsShown(), 0);
+    EXPECT_EQ(engine.takeNextCommand(), QStringLiteral("units lj"));
+    ASSERT_NE(engine.nextCommand(), nullptr);
+    EXPECT_EQ(engine.nextCommand()->text, QStringLiteral("boundary p p p"));
+
+    EXPECT_EQ(engine.takeNextCommand(), QStringLiteral("boundary p p p"));
+    EXPECT_TRUE(engine.allCommandsInserted());
+    EXPECT_EQ(engine.nextCommand(), nullptr);
+    EXPECT_TRUE(engine.takeNextCommand().isEmpty());
 }
 
-TEST(TutorialEngineTest, SkippingDoesNotBreakLaterSteps)
+TEST(TutorialEngineTest, InsertingEmitsTheCommand)
 {
     TutorialEngine engine(stubContent());
-    engine.skip();
-    engine.skip();
-    engine.skip();
-    ASSERT_NE(engine.currentStep(), nullptr);
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s4"));
-    // a skipped-past step is still fully answerable when reached again
-    const auto res = engine.submitChoice(1);
-    EXPECT_EQ(res.verdict, Verdict::Correct);
+    QString seen;
+    QObject::connect(&engine, &TutorialEngine::commandInserted, &engine,
+                     [&seen](const QString &text) {
+                         seen = text;
+                     });
+    engine.takeNextCommand();
+    EXPECT_EQ(seen, QStringLiteral("units lj"));
 }
 
-// ---- hints and the reveal ------------------------------------------------
-
-TEST(TutorialEngineTest, HintLadderRevealsOneRungAtATime)
+TEST(TutorialEngineTest, MovingOnResetsTheCommandCursor)
 {
     TutorialEngine engine(stubContent());
-    EXPECT_TRUE(engine.hasMoreHints());
-
-    auto shown = engine.nextHint();
-    EXPECT_EQ(shown.size(), 1);
-    EXPECT_EQ(shown.at(0), QStringLiteral("first nudge"));
-
-    shown = engine.nextHint();
-    EXPECT_EQ(shown.size(), 2);
-    EXPECT_FALSE(engine.hasMoreHints());
+    engine.takeNextCommand();
+    EXPECT_EQ(engine.insertedCount(), 1);
+    engine.next();
+    EXPECT_EQ(engine.insertedCount(), 0);
 }
 
-TEST(TutorialEngineTest, RevealBecomesAvailableAfterTheLadderIsExhausted)
-{
-    TutorialEngine engine(stubContent());
-    EXPECT_FALSE(engine.revealAvailable());
-    engine.nextHint();
-    EXPECT_FALSE(engine.revealAvailable());
-    engine.nextHint();
-    EXPECT_TRUE(engine.revealAvailable());
-}
+// ---- the reminder budget -------------------------------------------------
 
-TEST(TutorialEngineTest, RevealIsOfferedUnpromptedAfterThreeWrongAttempts)
+TEST(TutorialEngineTest, ConceptsAreExplainedUntilTheBudgetRunsOut)
 {
-    // the requirement: nobody gets stranded on a step they cannot pass
     TutorialEngine engine(stubContent());
-    for (int i = 0; i < TutorialEngine::REVEAL_AFTER - 1; ++i) {
-        engine.submitLine(QStringLiteral("units real"));
-        EXPECT_FALSE(engine.revealAvailable()) << i;
+    const QString id = QStringLiteral("units");
+
+    for (int i = 0; i < Cfg::CONCEPT_REMINDER_BUDGET; ++i) {
+        EXPECT_TRUE(engine.shouldExplain(id)) << "exposure " << i;
+        engine.noteConceptsShown({id});
+        engine.next(); // a new step lets the concept be counted again
     }
-    engine.submitLine(QStringLiteral("units real"));
-    EXPECT_EQ(engine.attempts(), TutorialEngine::REVEAL_AFTER);
-    EXPECT_TRUE(engine.revealAvailable());
+    EXPECT_EQ(engine.exposureCount(id), Cfg::CONCEPT_REMINDER_BUDGET);
+    EXPECT_FALSE(engine.shouldExplain(id));
 }
 
-TEST(TutorialEngineTest, UndecidableAnswersDoNotCountAsWrong)
+TEST(TutorialEngineTest, AConceptIsCountedOncePerStepNotPerRepaint)
 {
-    // a "$" substitution cannot be judged, so it must not push the user
-    // towards the reveal as though they had failed
+    // stepping back and forth over a step must not exhaust its budget
     TutorialEngine engine(stubContent());
-    engine.next(); // s2, a numeric fill
-    const auto res = engine.submitHoles({QStringLiteral("${cut}")});
-    EXPECT_EQ(res.verdict, Verdict::Unresolved);
-    EXPECT_EQ(engine.attempts(), 0);
+    const QString id = QStringLiteral("units");
+    for (int i = 0; i < 10; ++i)
+        engine.noteConceptsShown({id});
+    EXPECT_EQ(engine.exposureCount(id), 1);
 }
 
-TEST(TutorialEngineTest, HintStateResetsWhenTheCursorMoves)
+TEST(TutorialEngineTest, MovingToANewStepAllowsCountingAgain)
 {
     TutorialEngine engine(stubContent());
-    engine.nextHint();
+    const QString id = QStringLiteral("units");
+    engine.noteConceptsShown({id});
     engine.next();
-    EXPECT_EQ(engine.hintsShown(), 0);
+    engine.noteConceptsShown({id});
+    EXPECT_EQ(engine.exposureCount(id), 2);
 }
 
-// ---- verdicts and authored feedback --------------------------------------
-
-TEST(TutorialEngineTest, CorrectAnswerCarriesTheAuthoredPraise)
+TEST(TutorialEngineTest, AnEmptyConceptIdIsNeverExplainedOrCounted)
 {
     TutorialEngine engine(stubContent());
-    const auto res = engine.submitLine(QStringLiteral("units lj"));
-    EXPECT_EQ(res.verdict, Verdict::Correct);
-    EXPECT_EQ(res.feedback, QStringLiteral("well done"));
-    EXPECT_EQ(engine.attempts(), 0);
-}
-
-TEST(TutorialEngineTest, NumericMissPicksTheBelowOrAboveText)
-{
-    TutorialEngine engine(stubContent());
-    engine.next(); // s2
-
-    const auto low = engine.submitHoles({QStringLiteral("1.0")});
-    EXPECT_EQ(low.verdict, Verdict::Incorrect);
-    EXPECT_EQ(low.feedback, QStringLiteral("too short"));
-
-    const auto high = engine.submitHoles({QStringLiteral("9.0")});
-    EXPECT_EQ(high.feedback, QStringLiteral("wasteful"));
-}
-
-TEST(TutorialEngineTest, PredictionKeepsTheChosenOptionsOwnExplanation)
-{
-    TutorialEngine engine(stubContent());
-    engine.goToStep(QStringLiteral("s4"));
-
-    const auto wrong = engine.submitChoice(0);
-    EXPECT_EQ(wrong.verdict, Verdict::Incorrect);
-    EXPECT_EQ(wrong.feedback, QStringLiteral("because no"));
-
-    const auto right = engine.submitChoice(1);
-    EXPECT_EQ(right.verdict, Verdict::Correct);
-    EXPECT_EQ(right.feedback, QStringLiteral("because yes"));
-}
-
-TEST(TutorialEngineTest, VerdictSignalIsEmitted)
-{
-    TutorialEngine engine(stubContent());
-    SignalCounter spy(&engine, &TutorialEngine::verdictReady);
-    engine.submitLine(QStringLiteral("units lj"));
-    EXPECT_EQ(spy.count(), 1);
-}
-
-// ---- what can be checked yet ---------------------------------------------
-
-TEST(TutorialEngineTest, StepsNeedingLammpsReportThatTheyCannotBeCheckedYet)
-{
-    TutorialEngine engine(stubContent());
-    EXPECT_TRUE(engine.canCheckNow()); // TYPE
-    engine.next();
-    EXPECT_TRUE(engine.canCheckNow()); // FILL
-    engine.next();
-    EXPECT_FALSE(engine.canCheckNow()); // READ has no gate
-    engine.next();
-    EXPECT_TRUE(engine.canCheckNow()); // PREDICT
-}
-
-// ---- expert mode ---------------------------------------------------------
-
-TEST(TutorialEngineTest, ExpertModeStopsOnlyAtCheckpoints)
-{
-    TutorialEngine engine(stubContent());
-    engine.setExpertMode(true);
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s1"));
-
-    engine.next();
-    ASSERT_NE(engine.currentStep(), nullptr);
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s3")) << "should have skipped s2";
-}
-
-TEST(TutorialEngineTest, ExpertModeHidesNothingWhenTurnedOff)
-{
-    TutorialEngine engine(stubContent());
-    engine.setExpertMode(true);
-    engine.next();
-    engine.setExpertMode(false);
-    engine.previous();
-    EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s2"));
+    EXPECT_FALSE(engine.shouldExplain(QString()));
+    engine.noteConceptsShown({QString()});
+    EXPECT_EQ(engine.exposureCount(QString()), 0);
 }
 
 // ---- progress persistence ------------------------------------------------
 
-TEST(TutorialEngineTest, ProgressRoundTripsThroughSettings)
+TEST(TutorialEngineTest, CursorAndBudgetRoundTripThroughSettings)
 {
     SettingsSandbox sandbox;
-
     {
         TutorialEngine engine(stubContent());
-        engine.goToStep(QStringLiteral("s3"));
-        engine.setExpertMode(true);
+        engine.goToStep(QStringLiteral("s2"));
+        engine.noteConceptsShown({QStringLiteral("units")});
         engine.saveProgress();
     }
     {
         TutorialEngine engine(stubContent());
         engine.restoreProgress();
         ASSERT_NE(engine.currentStep(), nullptr);
-        EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s3"));
-        EXPECT_TRUE(engine.expertMode());
+        EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s2"));
+        EXPECT_EQ(engine.exposureCount(QStringLiteral("units")), 1);
     }
 }
 
-TEST(TutorialEngineTest, ResetProgressReturnsToTheStart)
+TEST(TutorialEngineTest, TheReminderBudgetIsSharedAcrossTutorials)
+{
+    // a concept learned in one tutorial should not be re-taught in the next
+    SettingsSandbox sandbox;
+    {
+        TutorialEngine engine(stubContent());
+        for (int i = 0; i < Cfg::CONCEPT_REMINDER_BUDGET; ++i) {
+            engine.noteConceptsShown({QStringLiteral("units")});
+            engine.next();
+        }
+        engine.saveProgress();
+    }
+    {
+        // a *different* tutorial id, same user
+        QByteArray other = stubDocument();
+        other.replace("\"id\": \"stub\"", "\"id\": \"other\"");
+        TutorialEngine engine(parseTutorialJson(other));
+        engine.restoreProgress();
+        EXPECT_FALSE(engine.shouldExplain(QStringLiteral("units")));
+    }
+}
+
+TEST(TutorialEngineTest, ResetClearsBothTheCursorAndTheReminders)
 {
     SettingsSandbox sandbox;
-
     TutorialEngine engine(stubContent());
-    engine.goToStep(QStringLiteral("s4"));
+    engine.goToStep(QStringLiteral("s3"));
+    engine.noteConceptsShown({QStringLiteral("units")});
     engine.saveProgress();
+
     engine.resetProgress();
     EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s1"));
+    EXPECT_EQ(engine.exposureCount(QStringLiteral("units")), 0);
 
     TutorialEngine fresh(stubContent());
     fresh.restoreProgress();
     EXPECT_EQ(fresh.currentStep()->id, QStringLiteral("s1"));
+    EXPECT_TRUE(fresh.shouldExplain(QStringLiteral("units")));
 }
 
 TEST(TutorialEngineTest, ASavedStepThatNoLongerExistsStartsOver)
 {
-    // content changed under the user: resuming at a guessed position would be
-    // worse than starting again
     SettingsSandbox sandbox;
     {
         QSettings settings;
@@ -374,7 +304,6 @@ TEST(TutorialEngineTest, ASavedStepThatNoLongerExistsStartsOver)
         settings.endGroup();
         settings.endGroup();
     }
-
     TutorialEngine engine(stubContent());
     engine.restoreProgress();
     EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s1"));

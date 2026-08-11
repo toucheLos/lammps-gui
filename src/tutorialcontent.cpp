@@ -13,9 +13,11 @@
 
 #include "constants.h"
 
+#include <QByteArray>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
 #include <QRegularExpression>
@@ -25,96 +27,36 @@
 
 namespace {
 
-/// the placeholder marking a hole in a Fill skeleton
-const QString HOLE = QStringLiteral("___");
-
-/// value of "parse_error" meaning "show only the verbatim LAMMPS message"
-const QString LAMMPS_MESSAGE = QStringLiteral("use_lammps_message");
-
-/// share of gated steps above which a tutorial has regressed into transcription
-constexpr double TYPE_SHARE_WARN = 0.5;
-
 // ---- enum name tables ----------------------------------------------------
 // One table per enum, used in both directions: parsing a content file and
 // naming a value in a diagnostic.  Keeping the spelling in exactly one place
 // is what stops the file format and the error messages from drifting apart.
 
-struct VerbName {
+struct KindName {
     const char *name;
-    StepVerb verb;
+    StepKind kind;
 };
-const VerbName VERB_NAMES[] = {
-    {"READ", StepVerb::Read},       {"TYPE", StepVerb::Type},       {"FILL", StepVerb::Fill},
-    {"FIX", StepVerb::Fix},         {"PREDICT", StepVerb::Predict}, {"TUNE", StepVerb::Tune},
-    {"INSPECT", StepVerb::Inspect},
+const KindName KIND_NAMES[] = {
+    {"SHOW", StepKind::Show},
+    {"EXPERIMENT", StepKind::Experiment},
 };
 
-struct ValidatorName {
+struct FigureName {
     const char *name;
-    ValidatorType type;
+    FigureSource source;
 };
-const ValidatorName VALIDATOR_NAMES[] = {
-    {"exact_tokens", ValidatorType::ExactTokens},
-    {"token_pattern", ValidatorType::TokenPattern},
-    {"numeric_range", ValidatorType::NumericRange},
-    {"numeric_value", ValidatorType::NumericValue},
-    {"style_valid", ValidatorType::StyleValid},
-    {"parses_clean", ValidatorType::ParsesClean},
-    {"choice", ValidatorType::Choice},
-    {"observation", ValidatorType::Observation},
-    {"script_state", ValidatorType::ScriptState},
+const FigureName FIGURE_NAMES[] = {
+    {"none", FigureSource::None},
+    {"snapshot", FigureSource::Snapshot},
 };
 
-struct RuleName {
+struct ParamKindName {
     const char *name;
-    RuleType type;
+    ParamKind kind;
 };
-const RuleName RULE_NAMES[] = {
-    {"any", RuleType::Any},
-    {"exact", RuleType::Exact},
-    {"enum", RuleType::Enumerated},
-    {"pattern", RuleType::Pattern},
-    {"numeric_range", RuleType::NumericRange},
-    {"numeric_value", RuleType::NumericValue},
-    {"style_valid", RuleType::StyleValid},
-};
-
-struct TargetName {
-    const char *name;
-    TargetLine target;
-};
-const TargetName TARGET_NAMES[] = {
-    {"append", TargetLine::Append},
-    {"replace_marker", TargetLine::ReplaceMarker},
-    {"line_number", TargetLine::LineNumber},
-};
-
-struct WidgetName {
-    const char *name;
-    VisualWidget widget;
-};
-const WidgetName WIDGET_NAMES[] = {
-    {"none", VisualWidget::None},
-    {"concept_plot", VisualWidget::ConceptPlot},
-    {"anatomy", VisualWidget::Anatomy},
-    {"lattice", VisualWidget::Lattice},
-};
-
-struct StyleCatName {
-    const char *name;
-    StyleCat cat;
-};
-// only the categories a content author can sensibly ask about; the injected
-// and static keyword sets (Color, ImageKw, Extra) are deliberately omitted
-const StyleCatName STYLE_CAT_NAMES[] = {
-    {"command", StyleCat::Command},     {"fix", StyleCat::Fix},
-    {"compute", StyleCat::Compute},     {"dump", StyleCat::Dump},
-    {"atom", StyleCat::Atom},           {"pair", StyleCat::Pair},
-    {"bond", StyleCat::Bond},           {"angle", StyleCat::Angle},
-    {"dihedral", StyleCat::Dihedral},   {"improper", StyleCat::Improper},
-    {"kspace", StyleCat::Kspace},       {"region", StyleCat::Region},
-    {"integrate", StyleCat::Integrate}, {"minimize", StyleCat::Minimize},
-    {"variable", StyleCat::Variable},   {"units", StyleCat::Units},
+const ParamKindName PARAM_NAMES[] = {
+    {"number", ParamKind::Number},
+    {"choice", ParamKind::Choice},
 };
 
 /// generic lookup over one of the name tables above
@@ -141,21 +83,25 @@ template <typename T, std::size_t N> QString acceptedNames(const T (&table)[N])
 
 // ---- known keys per object ----------------------------------------------
 // Unknown keys are warnings, not errors, so a file authored against a later
-// schema version still loads on an older build instead of being rejected
-// wholesale.  That is only safe because every key that changes *meaning*
-// rather than adding one must come with a schema_version bump.
+// minor revision still loads instead of being rejected wholesale.  That is
+// only safe because a key that changes *meaning* comes with a version bump.
 
 const QSet<QString> ROOT_KEYS = {
     QStringLiteral("schema_version"), QStringLiteral("id"),
     QStringLiteral("title"),          QStringLiteral("collection"),
     QStringLiteral("tutorial"),       QStringLiteral("requires_packages"),
     QStringLiteral("skeleton_file"),  QStringLiteral("attribution"),
-    QStringLiteral("acts"),
+    QStringLiteral("concepts"),       QStringLiteral("acts"),
 };
 const QSet<QString> ATTRIBUTION_KEYS = {
     QStringLiteral("source"),
     QStringLiteral("license"),
     QStringLiteral("credit"),
+};
+const QSet<QString> CONCEPT_KEYS = {
+    QStringLiteral("id"),
+    QStringLiteral("term"),
+    QStringLiteral("explain"),
 };
 const QSet<QString> ACT_KEYS = {
     QStringLiteral("id"),
@@ -163,35 +109,42 @@ const QSet<QString> ACT_KEYS = {
     QStringLiteral("steps"),
 };
 const QSet<QString> STEP_KEYS = {
-    QStringLiteral("id"),      QStringLiteral("verb"),      QStringLiteral("title"),
-    QStringLiteral("teach"),   QStringLiteral("doc_link"),  QStringLiteral("visual"),
-    QStringLiteral("editor"),  QStringLiteral("validate"),  QStringLiteral("feedback"),
-    QStringLiteral("options"), QStringLiteral("hints"),     QStringLiteral("reveal"),
-    QStringLiteral("advance"), QStringLiteral("skippable"), QStringLiteral("checkpoint"),
+    QStringLiteral("id"),
+    QStringLiteral("kind"),
+    QStringLiteral("title"),
+    QStringLiteral("teach"),
+    QStringLiteral("doc_link"),
+    QStringLiteral("figure"),
+    QStringLiteral("commands"),
+    QStringLiteral("params"),
+    QStringLiteral("prediction"),
+    QStringLiteral("expect"),
+    QStringLiteral("run_after_insert"),
+    QStringLiteral("checkpoint"),
 };
-const QSet<QString> VISUAL_KEYS = {QStringLiteral("widget"), QStringLiteral("config")};
-const QSet<QString> EDITOR_KEYS = {
-    QStringLiteral("target_line"), QStringLiteral("skeleton"),          QStringLiteral("marker"),
-    QStringLiteral("line_number"), QStringLiteral("focus_placeholder"),
+const QSet<QString> FIGURE_KEYS  = {QStringLiteral("source"), QStringLiteral("caption")};
+const QSet<QString> COMMAND_KEYS = {
+    QStringLiteral("text"),
+    QStringLiteral("explain"),
+    QStringLiteral("notes"),
+    QStringLiteral("concept"),
 };
-const QSet<QString> VALIDATE_KEYS = {
-    QStringLiteral("type"),
-    QStringLiteral("rules"),
-    QStringLiteral("also_require_parse"),
+const QSet<QString> NOTE_KEYS = {
+    QStringLiteral("arg"),
+    QStringLiteral("note"),
+    QStringLiteral("alternatives"),
+    QStringLiteral("concept"),
+};
+const QSet<QString> PARAM_KEYS = {
+    QStringLiteral("id"),      QStringLiteral("label"), QStringLiteral("kind"),
+    QStringLiteral("command"), QStringLiteral("arg"),   QStringLiteral("min"),
+    QStringLiteral("max"),     QStringLiteral("step"),  QStringLiteral("initial"),
+    QStringLiteral("choices"), QStringLiteral("unit"),  QStringLiteral("explain"),
+};
+const QSet<QString> PREDICTION_KEYS = {
+    QStringLiteral("question"),
+    QStringLiteral("options"),
     QStringLiteral("correct_option"),
-    QStringLiteral("observation"),
-    QStringLiteral("assertion"),
-    QStringLiteral("tolerance"),
-};
-const QSet<QString> RULE_KEYS = {
-    QStringLiteral("type"),  QStringLiteral("text"),     QStringLiteral("pattern"),
-    QStringLiteral("enum"),  QStringLiteral("category"), QStringLiteral("min"),
-    QStringLiteral("max"),   QStringLiteral("ideal"),    QStringLiteral("tolerance"),
-    QStringLiteral("label"), QStringLiteral("hint"),     QStringLiteral("case_sensitive"),
-};
-const QSet<QString> FEEDBACK_KEYS = {
-    QStringLiteral("correct"), QStringLiteral("wrong"),       QStringLiteral("below"),
-    QStringLiteral("above"),   QStringLiteral("parse_error"),
 };
 const QSet<QString> OPTION_KEYS = {QStringLiteral("text"), QStringLiteral("feedback")};
 
@@ -199,7 +152,7 @@ const QSet<QString> OPTION_KEYS = {QStringLiteral("text"), QStringLiteral("feedb
  * @brief Issue collector that knows where in the document it is
  *
  * Threading a path prefix through the parse is what turns "invalid content"
- * into "acts[1].steps[3].validate.min is not a number", which is the whole
+ * into "acts[1].steps[3].params[0].command is missing", which is the whole
  * point of validating an authored file.
  */
 class Ctx {
@@ -225,8 +178,7 @@ public:
     }
 
     /// number of ERROR findings reported so far; mutable because reporting is
-    /// a logically const operation on a collector that is passed around as a
-    /// const reference by the field readers
+    /// a logically const operation on a collector passed around as a reference
     mutable int errors = 0;
 
 private:
@@ -344,354 +296,179 @@ bool readObject(const QJsonObject &obj, const QString &key, const QString &path,
     return true;
 }
 
+/// read an array of objects, reporting non-objects at their own index
+bool readObjectArray(const QJsonObject &obj, const QString &key, const QString &path,
+                     const Ctx &ctx, QList<QJsonObject> &out, QStringList &paths)
+{
+    if (!obj.contains(key)) return false;
+    const QJsonValue v = obj.value(key);
+    if (!v.isArray()) {
+        ctx.error(sub(path, key), QStringLiteral("expected an array"));
+        return false;
+    }
+    const QJsonArray arr  = v.toArray();
+    const QString arrpath = sub(path, key);
+    for (int i = 0; i < arr.size(); ++i) {
+        if (!arr.at(i).isObject()) {
+            ctx.error(idx(arrpath, i), QStringLiteral("expected an object"));
+            continue;
+        }
+        out.append(arr.at(i).toObject());
+        paths.append(idx(arrpath, i));
+    }
+    return true;
+}
+
 // ---- section parsers -----------------------------------------------------
 
-TutorialRule parseRule(const QJsonObject &obj, const QString &path, Ctx &ctx)
+/// the first word of a command line, used to bind a parameter to a command
+QString commandWordOf(const QString &line)
 {
-    TutorialRule rule;
-    ctx.checkKeys(obj, RULE_KEYS, path);
+    const QString trimmed = line.trimmed();
+    const int space       = trimmed.indexOf(QRegularExpression(QStringLiteral("\\s")));
+    return space < 0 ? trimmed : trimmed.left(space);
+}
 
-    QString typestr;
-    if (readString(obj, QStringLiteral("type"), path, ctx, typestr, true)) {
-        if (!lookupName(RULE_NAMES, typestr, &RuleName::type, rule.type))
-            ctx.error(sub(path, QStringLiteral("type")),
-                      QStringLiteral("unknown rule type \"%1\"; expected one of: %2")
-                          .arg(typestr, acceptedNames(RULE_NAMES)));
+CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
+                         QSet<QString> &usedConcepts)
+{
+    CommandLine cmd;
+    ctx.checkKeys(obj, COMMAND_KEYS, path);
+
+    readString(obj, QStringLiteral("text"), path, ctx, cmd.text, true);
+    readString(obj, QStringLiteral("explain"), path, ctx, cmd.explain);
+    if (readString(obj, QStringLiteral("concept"), path, ctx, cmd.conceptId))
+        usedConcepts.insert(cmd.conceptId);
+
+    if (cmd.text.contains(QLatin1Char('\n')))
+        ctx.error(sub(path, QStringLiteral("text")),
+                  QStringLiteral("one command per entry: split multi-line blocks so each "
+                                 "line can carry its own explanation"));
+
+    QList<QJsonObject> notes;
+    QStringList notepaths;
+    readObjectArray(obj, QStringLiteral("notes"), path, ctx, notes, notepaths);
+    for (int i = 0; i < notes.size(); ++i) {
+        const QJsonObject &n = notes.at(i);
+        const QString &npath = notepaths.at(i);
+        ctx.checkKeys(n, NOTE_KEYS, npath);
+        TokenNote note;
+        readInt(n, QStringLiteral("arg"), npath, ctx, note.argIndex);
+        readString(n, QStringLiteral("note"), npath, ctx, note.note, true);
+        readString(n, QStringLiteral("alternatives"), npath, ctx, note.alternatives);
+        if (readString(n, QStringLiteral("concept"), npath, ctx, note.conceptId))
+            usedConcepts.insert(note.conceptId);
+        if (note.argIndex < 0)
+            ctx.error(sub(npath, QStringLiteral("arg")),
+                      QStringLiteral("argument index must be 0 (the command word) or higher"));
+        cmd.notes.append(note);
     }
+    return cmd;
+}
 
-    readString(obj, QStringLiteral("text"), path, ctx, rule.text);
-    readString(obj, QStringLiteral("pattern"), path, ctx, rule.pattern);
-    readStringList(obj, QStringLiteral("enum"), path, ctx, rule.choices);
-    readString(obj, QStringLiteral("label"), path, ctx, rule.label);
-    readString(obj, QStringLiteral("hint"), path, ctx, rule.hint);
-    readBool(obj, QStringLiteral("case_sensitive"), path, ctx, rule.caseSensitive);
-    readDouble(obj, QStringLiteral("min"), path, ctx, rule.min);
-    readDouble(obj, QStringLiteral("max"), path, ctx, rule.max);
-    readDouble(obj, QStringLiteral("tolerance"), path, ctx, rule.tolerance);
-    rule.hasIdeal = readDouble(obj, QStringLiteral("ideal"), path, ctx, rule.ideal);
+TutorialParam parseParam(const QJsonObject &obj, const QString &path, Ctx &ctx)
+{
+    TutorialParam param;
+    ctx.checkKeys(obj, PARAM_KEYS, path);
 
-    QString catstr;
-    if (readString(obj, QStringLiteral("category"), path, ctx, catstr))
-        if (!lookupName(STYLE_CAT_NAMES, catstr, &StyleCatName::cat, rule.cat))
-            ctx.error(sub(path, QStringLiteral("category")),
-                      QStringLiteral("unknown style category \"%1\"; expected one of: %2")
-                          .arg(catstr, acceptedNames(STYLE_CAT_NAMES)));
+    readString(obj, QStringLiteral("id"), path, ctx, param.id, true);
+    readString(obj, QStringLiteral("label"), path, ctx, param.label, true);
+    readString(obj, QStringLiteral("command"), path, ctx, param.command, true);
+    readString(obj, QStringLiteral("unit"), path, ctx, param.unit);
+    readString(obj, QStringLiteral("explain"), path, ctx, param.explain);
+    readInt(obj, QStringLiteral("arg"), path, ctx, param.argIndex);
 
-    // per-type requirements: a rule that cannot decide anything is a content bug
-    switch (rule.type) {
-        case RuleType::Exact:
-            if (rule.text.isEmpty())
-                ctx.error(sub(path, QStringLiteral("text")),
-                          QStringLiteral("an \"exact\" rule needs the expected word"));
-            break;
-        case RuleType::Enumerated:
-            if (rule.choices.isEmpty())
-                ctx.error(sub(path, QStringLiteral("enum")),
-                          QStringLiteral("an \"enum\" rule needs at least one allowed word"));
-            break;
-        case RuleType::Pattern:
-            if (rule.pattern.isEmpty()) {
-                ctx.error(sub(path, QStringLiteral("pattern")),
-                          QStringLiteral("a \"pattern\" rule needs a regular expression"));
-            } else {
-                // compile now: a broken expression must fail at load, not mid-tutorial
-                const QRegularExpression re(QRegularExpression::anchoredPattern(rule.pattern));
-                if (!re.isValid())
-                    ctx.error(
-                        sub(path, QStringLiteral("pattern")),
-                        QStringLiteral("invalid regular expression: %1").arg(re.errorString()));
-            }
-            break;
-        case RuleType::NumericRange:
-            if (!obj.contains(QStringLiteral("min")) || !obj.contains(QStringLiteral("max"))) {
-                ctx.error(path, QStringLiteral(
-                                    "a \"numeric_range\" rule needs both \"min\" and \"max\""));
-            } else if (rule.min > rule.max) {
+    QString kindstr;
+    if (readString(obj, QStringLiteral("kind"), path, ctx, kindstr))
+        if (!lookupName(PARAM_NAMES, kindstr, &ParamKindName::kind, param.kind))
+            ctx.error(sub(path, QStringLiteral("kind")),
+                      QStringLiteral("unknown parameter kind \"%1\"; expected one of: %2")
+                          .arg(kindstr, acceptedNames(PARAM_NAMES)));
+
+    if (param.argIndex < 1)
+        ctx.error(sub(path, QStringLiteral("arg")),
+                  QStringLiteral("a parameter rewrites an argument, so arg must be 1 or higher"));
+
+    switch (param.kind) {
+        case ParamKind::Number: {
+            const bool hasmin = readDouble(obj, QStringLiteral("min"), path, ctx, param.min);
+            const bool hasmax = readDouble(obj, QStringLiteral("max"), path, ctx, param.max);
+            readDouble(obj, QStringLiteral("step"), path, ctx, param.step);
+            const bool hasinit =
+                readDouble(obj, QStringLiteral("initial"), path, ctx, param.initial);
+            if (!hasmin || !hasmax) {
+                ctx.error(path, QStringLiteral("a number parameter needs both \"min\" and "
+                                               "\"max\""));
+            } else if (param.min >= param.max) {
                 ctx.error(sub(path, QStringLiteral("min")),
-                          QStringLiteral("min (%1) is greater than max (%2)")
-                              .arg(rule.min)
-                              .arg(rule.max));
-            } else if (rule.hasIdeal && (rule.ideal < rule.min || rule.ideal > rule.max)) {
-                // the round-trip test plays every step with its ideal answer, so an
-                // ideal outside the accepted range would fail the tutorial's own test
-                ctx.error(sub(path, QStringLiteral("ideal")),
-                          QStringLiteral("ideal (%1) lies outside [min, max] = [%2, %3]")
-                              .arg(rule.ideal)
-                              .arg(rule.min)
-                              .arg(rule.max));
+                          QStringLiteral("min (%1) must be below max (%2)")
+                              .arg(param.min)
+                              .arg(param.max));
+            } else if (hasinit && (param.initial < param.min || param.initial > param.max)) {
+                ctx.error(sub(path, QStringLiteral("initial")),
+                          QStringLiteral("initial (%1) lies outside [%2, %3]")
+                              .arg(param.initial)
+                              .arg(param.min)
+                              .arg(param.max));
             }
+            if (param.step <= 0.0) param.step = (param.max - param.min) / 100.0;
+            if (!hasinit) param.initial = param.min;
             break;
-        case RuleType::NumericValue:
-            if (!rule.hasIdeal)
-                ctx.error(sub(path, QStringLiteral("ideal")),
-                          QStringLiteral("a \"numeric_value\" rule needs the expected number "
-                                         "in \"ideal\""));
-            break;
-        case RuleType::StyleValid:
-            if (rule.cat == StyleCat::None)
-                ctx.error(sub(path, QStringLiteral("category")),
-                          QStringLiteral("a \"style_valid\" rule needs a style category"));
-            break;
-        case RuleType::Any:
-            break;
-    }
-    return rule;
-}
-
-TutorialValidator parseValidator(const QJsonObject &obj, const QString &path, Ctx &ctx)
-{
-    TutorialValidator val;
-    ctx.checkKeys(obj, VALIDATE_KEYS, path);
-
-    QString typestr;
-    if (readString(obj, QStringLiteral("type"), path, ctx, typestr, true)) {
-        if (!lookupName(VALIDATOR_NAMES, typestr, &ValidatorName::type, val.type))
-            ctx.error(sub(path, QStringLiteral("type")),
-                      QStringLiteral("unknown validator type \"%1\"; expected one of: %2")
-                          .arg(typestr, acceptedNames(VALIDATOR_NAMES)));
-    }
-
-    readBool(obj, QStringLiteral("also_require_parse"), path, ctx, val.alsoRequireParse);
-    readInt(obj, QStringLiteral("correct_option"), path, ctx, val.correctOption);
-    readString(obj, QStringLiteral("observation"), path, ctx, val.observation);
-    readString(obj, QStringLiteral("assertion"), path, ctx, val.assertion);
-    readDouble(obj, QStringLiteral("tolerance"), path, ctx, val.tolerance);
-
-    if (obj.contains(QStringLiteral("rules"))) {
-        const QJsonValue v = obj.value(QStringLiteral("rules"));
-        if (!v.isArray()) {
-            ctx.error(sub(path, QStringLiteral("rules")), QStringLiteral("expected an array"));
-        } else {
-            const QJsonArray arr    = v.toArray();
-            const QString rulespath = sub(path, QStringLiteral("rules"));
-            for (int i = 0; i < arr.size(); ++i) {
-                if (!arr.at(i).isObject()) {
-                    ctx.error(idx(rulespath, i), QStringLiteral("expected an object"));
-                    continue;
-                }
-                val.rules.append(parseRule(arr.at(i).toObject(), idx(rulespath, i), ctx));
-            }
         }
-    }
-
-    // validators that cannot work without rules
-    switch (val.type) {
-        case ValidatorType::ExactTokens:
-        case ValidatorType::TokenPattern:
-        case ValidatorType::NumericRange:
-        case ValidatorType::NumericValue:
-        case ValidatorType::StyleValid:
-            if (val.rules.isEmpty())
-                ctx.error(sub(path, QStringLiteral("rules")),
-                          QStringLiteral("a \"%1\" validator needs at least one rule")
-                              .arg(validatorTypeName(val.type)));
-            break;
-        case ValidatorType::Observation:
-            if (val.observation.isEmpty())
-                ctx.error(sub(path, QStringLiteral("observation")),
-                          QStringLiteral("an \"observation\" validator needs the thermo "
-                                         "keyword to compare against"));
-            if (val.tolerance <= 0.0)
-                ctx.error(sub(path, QStringLiteral("tolerance")),
-                          QStringLiteral("an \"observation\" validator needs a positive "
-                                         "tolerance; exact float equality never holds"));
-            break;
-        case ValidatorType::ScriptState:
-            if (val.assertion.isEmpty())
-                ctx.error(sub(path, QStringLiteral("assertion")),
-                          QStringLiteral("a \"script_state\" validator needs an assertion"));
-            break;
-        case ValidatorType::Choice:
-        case ValidatorType::ParsesClean:
+        case ParamKind::Choice:
+            readStringList(obj, QStringLiteral("choices"), path, ctx, param.choices);
+            readString(obj, QStringLiteral("initial"), path, ctx, param.initialChoice);
+            if (param.choices.size() < 2)
+                ctx.error(sub(path, QStringLiteral("choices")),
+                          QStringLiteral("a choice parameter needs at least two options"));
+            else if (param.initialChoice.isEmpty())
+                param.initialChoice = param.choices.first();
+            else if (!param.choices.contains(param.initialChoice))
+                ctx.error(sub(path, QStringLiteral("initial")),
+                          QStringLiteral("\"%1\" is not one of the offered choices")
+                              .arg(param.initialChoice));
             break;
     }
-    return val;
+    return param;
 }
 
-TutorialEditorAction parseEditor(const QJsonObject &obj, const QString &path, Ctx &ctx)
+TutorialPrediction parsePrediction(const QJsonObject &obj, const QString &path, Ctx &ctx)
 {
-    TutorialEditorAction ed;
-    ed.hasEditorSection = true;
-    ctx.checkKeys(obj, EDITOR_KEYS, path);
+    TutorialPrediction pred;
+    pred.present = true;
+    ctx.checkKeys(obj, PREDICTION_KEYS, path);
 
-    QString targetstr;
-    if (readString(obj, QStringLiteral("target_line"), path, ctx, targetstr))
-        if (!lookupName(TARGET_NAMES, targetstr, &TargetName::target, ed.target))
-            ctx.error(sub(path, QStringLiteral("target_line")),
-                      QStringLiteral("unknown target \"%1\"; expected one of: %2")
-                          .arg(targetstr, acceptedNames(TARGET_NAMES)));
+    readString(obj, QStringLiteral("question"), path, ctx, pred.question, true);
+    pred.correctOption = -1;
+    readInt(obj, QStringLiteral("correct_option"), path, ctx, pred.correctOption);
 
-    readString(obj, QStringLiteral("skeleton"), path, ctx, ed.skeleton);
-    readString(obj, QStringLiteral("marker"), path, ctx, ed.marker);
-    readInt(obj, QStringLiteral("line_number"), path, ctx, ed.lineNumber);
-    readInt(obj, QStringLiteral("focus_placeholder"), path, ctx, ed.focusPlaceholder);
-
-    if (ed.target == TargetLine::ReplaceMarker && ed.marker.isEmpty())
-        ctx.error(sub(path, QStringLiteral("marker")),
-                  QStringLiteral("\"replace_marker\" needs the marker text to look for"));
-    if (ed.target == TargetLine::LineNumber && ed.lineNumber < 1)
-        ctx.error(sub(path, QStringLiteral("line_number")),
-                  QStringLiteral("\"line_number\" needs a 1-based line number"));
-
-    const int holes = ed.holeCount();
-    if (ed.focusPlaceholder < 0 || (holes > 0 && ed.focusPlaceholder >= holes))
-        ctx.error(sub(path, QStringLiteral("focus_placeholder")),
-                  QStringLiteral("focus_placeholder %1 is out of range; the skeleton has %2 holes")
-                      .arg(ed.focusPlaceholder)
-                      .arg(holes));
-    return ed;
-}
-
-TutorialFeedback parseFeedback(const QJsonObject &obj, const QString &path, Ctx &ctx)
-{
-    TutorialFeedback fb;
-    ctx.checkKeys(obj, FEEDBACK_KEYS, path);
-    readString(obj, QStringLiteral("correct"), path, ctx, fb.correct);
-    readString(obj, QStringLiteral("wrong"), path, ctx, fb.wrong);
-    readString(obj, QStringLiteral("below"), path, ctx, fb.below);
-    readString(obj, QStringLiteral("above"), path, ctx, fb.above);
-
-    QString parse;
-    if (readString(obj, QStringLiteral("parse_error"), path, ctx, parse)) {
-        // the real LAMMPS error text is always shown; this string is the gloss
-        // printed beneath it, and the sentinel means "no gloss, just the error"
-        if (parse != LAMMPS_MESSAGE) fb.parseError = parse;
-    }
-    return fb;
-}
-
-TutorialVisual parseVisual(const QJsonObject &obj, const QString &path, Ctx &ctx)
-{
-    TutorialVisual vis;
-    ctx.checkKeys(obj, VISUAL_KEYS, path);
-
-    QString widgetstr;
-    if (readString(obj, QStringLiteral("widget"), path, ctx, widgetstr, true))
-        if (!lookupName(WIDGET_NAMES, widgetstr, &WidgetName::widget, vis.widget))
-            ctx.error(sub(path, QStringLiteral("widget")),
-                      QStringLiteral("unknown visual \"%1\"; expected one of: %2")
-                          .arg(widgetstr, acceptedNames(WIDGET_NAMES)));
-
-    QJsonObject cfg;
-    if (readObject(obj, QStringLiteral("config"), path, ctx, cfg)) vis.config = cfg;
-    return vis;
-}
-
-/// true when the verb gates progress, i.e. the user can be told "not yet"
-bool isGated(StepVerb verb)
-{
-    return verb != StepVerb::Read && verb != StepVerb::Inspect;
-}
-
-/// cross-check that the verb and its validator can actually gate each other
-void checkVerbValidator(const TutorialStep &step, bool hasValidate, const QString &path, Ctx &ctx)
-{
-    const QString vpath    = sub(path, QStringLiteral("validate"));
-    const ValidatorType vt = step.validate.type;
-
-    // a checkpoint may additionally assert whole-script state whatever its verb
-    if (hasValidate && vt == ValidatorType::ScriptState) {
-        if (!step.checkpoint)
-            ctx.error(vpath, QStringLiteral("a \"script_state\" validator is only meaningful on "
-                                            "a checkpoint step"));
-        return;
+    QList<QJsonObject> options;
+    QStringList optpaths;
+    readObjectArray(obj, QStringLiteral("options"), path, ctx, options, optpaths);
+    for (int i = 0; i < options.size(); ++i) {
+        ctx.checkKeys(options.at(i), OPTION_KEYS, optpaths.at(i));
+        TutorialOption opt;
+        readString(options.at(i), QStringLiteral("text"), optpaths.at(i), ctx, opt.text, true);
+        readString(options.at(i), QStringLiteral("feedback"), optpaths.at(i), ctx, opt.feedback);
+        if (opt.feedback.isEmpty())
+            ctx.warn(optpaths.at(i), QStringLiteral("this option teaches nothing; every answer "
+                                                    "should explain itself"));
+        pred.options.append(opt);
     }
 
-    switch (step.verb) {
-        case StepVerb::Read:
-        case StepVerb::Inspect:
-            if (hasValidate)
-                ctx.warn(vpath, QStringLiteral("a %1 step is gated by the Next button; the "
-                                               "validator is ignored")
-                                    .arg(stepVerbName(step.verb)));
-            break;
-
-        case StepVerb::Type:
-            if (!hasValidate) {
-                ctx.error(vpath, QStringLiteral("a TYPE step needs a validator"));
-            } else if (vt != ValidatorType::ExactTokens && vt != ValidatorType::TokenPattern) {
-                ctx.error(vpath,
-                          QStringLiteral("a TYPE step needs \"exact_tokens\" or "
-                                         "\"token_pattern\"; \"%1\" cannot tell which command "
-                                         "was meant")
-                              .arg(validatorTypeName(vt)));
-            }
-            break;
-
-        case StepVerb::Fill:
-            if (!hasValidate) {
-                ctx.error(vpath, QStringLiteral("a FILL step needs a validator"));
-            } else if (vt == ValidatorType::Choice || vt == ValidatorType::Observation ||
-                       vt == ValidatorType::ParsesClean) {
-                ctx.error(vpath, QStringLiteral("a FILL step cannot be gated by \"%1\"")
-                                     .arg(validatorTypeName(vt)));
-            } else if (step.editor.holeCount() == 0) {
-                ctx.error(sub(path, QStringLiteral("editor.skeleton")),
-                          QStringLiteral("a FILL step needs a skeleton containing at least one "
-                                         "\"___\" hole"));
-            } else if (step.validate.rules.size() != step.editor.holeCount()) {
-                ctx.error(vpath, QStringLiteral("the skeleton has %1 \"___\" holes but %2 rules "
-                                                "were given; they must correspond one to one")
-                                     .arg(step.editor.holeCount())
-                                     .arg(step.validate.rules.size()));
-            }
-            break;
-
-        case StepVerb::Fix:
-            if (!hasValidate) {
-                ctx.error(vpath, QStringLiteral("a FIX step needs a validator"));
-            } else if (vt != ValidatorType::ParsesClean) {
-                ctx.error(vpath, QStringLiteral("a FIX step is gated by \"parses_clean\"; the "
-                                                "point is that LAMMPS itself accepts the "
-                                                "repaired command"));
-            }
-            if (step.editor.skeleton.isEmpty())
-                ctx.error(sub(path, QStringLiteral("editor.skeleton")),
-                          QStringLiteral("a FIX step needs the broken command to repair"));
-            else if (step.editor.holeCount() > 0)
-                ctx.error(sub(path, QStringLiteral("editor.skeleton")),
-                          QStringLiteral("a FIX step presents a broken command, not \"___\" "
-                                         "holes; use FILL for holes"));
-            break;
-
-        case StepVerb::Predict:
-            if (!hasValidate) {
-                ctx.error(vpath, QStringLiteral("a PREDICT step needs a validator"));
-            } else if (vt != ValidatorType::Choice) {
-                ctx.error(vpath, QStringLiteral("a PREDICT step is gated by \"choice\""));
-            } else if (step.options.size() < 2) {
-                ctx.error(sub(path, QStringLiteral("options")),
-                          QStringLiteral("a PREDICT step needs at least two options; one option "
-                                         "can be clicked past"));
-            } else if (step.validate.correctOption < 0 ||
-                       step.validate.correctOption >= step.options.size()) {
-                ctx.error(sub(vpath, QStringLiteral("correct_option")),
-                          QStringLiteral("correct_option %1 is out of range for %2 options")
-                              .arg(step.validate.correctOption)
-                              .arg(step.options.size()));
-            }
-            break;
-
-        case StepVerb::Tune:
-            if (!hasValidate) {
-                ctx.error(vpath, QStringLiteral("a TUNE step needs a validator"));
-            } else if (vt != ValidatorType::Observation) {
-                ctx.error(vpath, QStringLiteral("a TUNE step is gated by \"observation\": the "
-                                                "user re-runs and reports what changed"));
-            }
-            break;
-    }
-
-    // both branches of a PREDICT have to teach, or the question is a coin flip
-    if (step.verb == StepVerb::Predict)
-        for (int i = 0; i < step.options.size(); ++i)
-            if (step.options.at(i).feedback.isEmpty())
-                ctx.warn(idx(sub(path, QStringLiteral("options")), i),
-                         QStringLiteral("this option teaches nothing; every PREDICT answer "
-                                        "should explain itself"));
+    if (pred.options.size() < 2)
+        ctx.error(sub(path, QStringLiteral("options")),
+                  QStringLiteral("a prediction needs at least two options"));
+    else if (pred.correctOption < 0 || pred.correctOption >= pred.options.size())
+        ctx.error(sub(path, QStringLiteral("correct_option")),
+                  QStringLiteral("correct_option %1 is out of range for %2 options")
+                      .arg(pred.correctOption)
+                      .arg(pred.options.size()));
+    return pred;
 }
 
-TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx)
+TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
+                       QSet<QString> &usedConcepts)
 {
     TutorialStep step;
     ctx.checkKeys(obj, STEP_KEYS, path);
@@ -699,29 +476,16 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx)
     readString(obj, QStringLiteral("id"), path, ctx, step.id, true);
     readString(obj, QStringLiteral("title"), path, ctx, step.title, true);
     readString(obj, QStringLiteral("teach"), path, ctx, step.teach);
-    readString(obj, QStringLiteral("reveal"), path, ctx, step.reveal);
-    readStringList(obj, QStringLiteral("hints"), path, ctx, step.hints);
-    readBool(obj, QStringLiteral("skippable"), path, ctx, step.skippable);
+    readString(obj, QStringLiteral("expect"), path, ctx, step.expect);
     readBool(obj, QStringLiteral("checkpoint"), path, ctx, step.checkpoint);
+    readBool(obj, QStringLiteral("run_after_insert"), path, ctx, step.runAfterInsert);
 
-    QString verbstr;
-    if (readString(obj, QStringLiteral("verb"), path, ctx, verbstr, true))
-        if (!lookupName(VERB_NAMES, verbstr, &VerbName::verb, step.verb))
-            ctx.error(sub(path, QStringLiteral("verb")),
-                      QStringLiteral("unknown verb \"%1\"; expected one of: %2")
-                          .arg(verbstr, acceptedNames(VERB_NAMES)));
-
-    QString advstr;
-    if (readString(obj, QStringLiteral("advance"), path, ctx, advstr)) {
-        if (advstr == QLatin1String("auto")) {
-            step.advance = AdvanceMode::Auto;
-        } else if (advstr == QLatin1String("manual")) {
-            step.advance = AdvanceMode::Manual;
-        } else {
-            ctx.error(sub(path, QStringLiteral("advance")),
-                      QStringLiteral("expected \"auto\" or \"manual\""));
-        }
-    }
+    QString kindstr;
+    if (readString(obj, QStringLiteral("kind"), path, ctx, kindstr, true))
+        if (!lookupName(KIND_NAMES, kindstr, &KindName::kind, step.kind))
+            ctx.error(sub(path, QStringLiteral("kind")),
+                      QStringLiteral("unknown step kind \"%1\"; expected one of: %2")
+                          .arg(kindstr, acceptedNames(KIND_NAMES)));
 
     // "pair_style lj/cut" resolves against the shipped help index, which is
     // keyed by command and optionally by style
@@ -738,100 +502,94 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx)
         }
     }
 
-    QJsonObject secobj;
-    if (readObject(obj, QStringLiteral("visual"), path, ctx, secobj))
-        step.visual = parseVisual(secobj, sub(path, QStringLiteral("visual")), ctx);
-    if (readObject(obj, QStringLiteral("editor"), path, ctx, secobj))
-        step.editor = parseEditor(secobj, sub(path, QStringLiteral("editor")), ctx);
-    if (readObject(obj, QStringLiteral("feedback"), path, ctx, secobj))
-        step.feedback = parseFeedback(secobj, sub(path, QStringLiteral("feedback")), ctx);
-
-    if (obj.contains(QStringLiteral("options"))) {
-        const QJsonValue v = obj.value(QStringLiteral("options"));
-        if (!v.isArray()) {
-            ctx.error(sub(path, QStringLiteral("options")), QStringLiteral("expected an array"));
-        } else {
-            const QJsonArray arr   = v.toArray();
-            const QString optspath = sub(path, QStringLiteral("options"));
-            for (int i = 0; i < arr.size(); ++i) {
-                if (!arr.at(i).isObject()) {
-                    ctx.error(idx(optspath, i), QStringLiteral("expected an object"));
-                    continue;
-                }
-                const QJsonObject o = arr.at(i).toObject();
-                ctx.checkKeys(o, OPTION_KEYS, idx(optspath, i));
-                TutorialOption opt;
-                readString(o, QStringLiteral("text"), idx(optspath, i), ctx, opt.text, true);
-                readString(o, QStringLiteral("feedback"), idx(optspath, i), ctx, opt.feedback);
-                step.options.append(opt);
-            }
-        }
+    QJsonObject figobj;
+    if (readObject(obj, QStringLiteral("figure"), path, ctx, figobj)) {
+        const QString figpath = sub(path, QStringLiteral("figure"));
+        ctx.checkKeys(figobj, FIGURE_KEYS, figpath);
+        QString src;
+        if (readString(figobj, QStringLiteral("source"), figpath, ctx, src, true))
+            if (!lookupName(FIGURE_NAMES, src, &FigureName::source, step.figure))
+                ctx.error(sub(figpath, QStringLiteral("source")),
+                          QStringLiteral("unknown figure source \"%1\"; expected one of: %2")
+                              .arg(src, acceptedNames(FIGURE_NAMES)));
+        readString(figobj, QStringLiteral("caption"), figpath, ctx, step.figureCaption);
     }
 
-    bool hasValidate = false;
-    if (readObject(obj, QStringLiteral("validate"), path, ctx, secobj)) {
-        step.validate = parseValidator(secobj, sub(path, QStringLiteral("validate")), ctx);
-        hasValidate   = true;
+    QList<QJsonObject> cmds;
+    QStringList cmdpaths;
+    readObjectArray(obj, QStringLiteral("commands"), path, ctx, cmds, cmdpaths);
+    for (int i = 0; i < cmds.size(); ++i)
+        step.commands.append(parseCommand(cmds.at(i), cmdpaths.at(i), ctx, usedConcepts));
+
+    QList<QJsonObject> params;
+    QStringList parampaths;
+    readObjectArray(obj, QStringLiteral("params"), path, ctx, params, parampaths);
+    for (int i = 0; i < params.size(); ++i)
+        step.params.append(parseParam(params.at(i), parampaths.at(i), ctx));
+
+    QJsonObject predobj;
+    if (readObject(obj, QStringLiteral("prediction"), path, ctx, predobj))
+        step.prediction = parsePrediction(predobj, sub(path, QStringLiteral("prediction")), ctx);
+
+    // ---- cross-checks the schema alone cannot express ----
+    switch (step.kind) {
+        case StepKind::Show:
+            if (step.commands.isEmpty() && step.teach.isEmpty())
+                ctx.error(path, QStringLiteral("a SHOW step needs either commands to show or "
+                                               "teach text; this one presents nothing"));
+            if (!step.params.isEmpty())
+                ctx.warn(sub(path, QStringLiteral("params")),
+                         QStringLiteral("parameters belong to an EXPERIMENT step and are "
+                                        "ignored here"));
+            if (step.prediction.present)
+                ctx.warn(sub(path, QStringLiteral("prediction")),
+                         QStringLiteral("a prediction belongs immediately before a run, so it "
+                                        "is ignored on a SHOW step"));
+            break;
+
+        case StepKind::Experiment:
+            if (step.params.isEmpty())
+                ctx.error(sub(path, QStringLiteral("params")),
+                          QStringLiteral("an EXPERIMENT step needs at least one parameter to "
+                                         "change; otherwise it is just a run"));
+            if (step.expect.isEmpty())
+                ctx.warn(sub(path, QStringLiteral("expect")),
+                         QStringLiteral("no \"expect\" text; the user is told to run but not "
+                                        "what to look for"));
+            break;
     }
-    checkVerbValidator(step, hasValidate, path, ctx);
 
     if (step.teach.isEmpty())
         ctx.warn(sub(path, QStringLiteral("teach")),
                  QStringLiteral("no teach text; a step that explains nothing is busywork"));
 
-    // The anti-coercion rule, enforced mechanically rather than by review: a
-    // step that can reject an answer must offer a way past it.
-    if (isGated(step.verb) && !step.skippable && step.reveal.isEmpty())
-        ctx.error(sub(path, QStringLiteral("skippable")),
-                  QStringLiteral("a non-skippable %1 step must provide \"reveal\", otherwise a "
-                                 "stuck user has no way forward")
-                      .arg(stepVerbName(step.verb)));
-
     return step;
 }
 
-TutorialAct parseAct(const QJsonObject &obj, const QString &path, Ctx &ctx)
+TutorialAct parseAct(const QJsonObject &obj, const QString &path, Ctx &ctx,
+                     QSet<QString> &usedConcepts)
 {
     TutorialAct act;
     ctx.checkKeys(obj, ACT_KEYS, path);
     readString(obj, QStringLiteral("id"), path, ctx, act.id, true);
     readString(obj, QStringLiteral("title"), path, ctx, act.title, true);
 
-    const QJsonValue v = obj.value(QStringLiteral("steps"));
-    if (!v.isArray()) {
+    QList<QJsonObject> steps;
+    QStringList steppaths;
+    if (!readObjectArray(obj, QStringLiteral("steps"), path, ctx, steps, steppaths)) {
         ctx.error(sub(path, QStringLiteral("steps")), QStringLiteral("expected an array of steps"));
         return act;
     }
-    const QJsonArray arr    = v.toArray();
-    const QString stepspath = sub(path, QStringLiteral("steps"));
-    if (arr.isEmpty()) ctx.error(stepspath, QStringLiteral("an act needs at least one step"));
+    if (steps.isEmpty())
+        ctx.error(sub(path, QStringLiteral("steps")),
+                  QStringLiteral("an act needs at least one step"));
 
-    StepVerb prev = StepVerb::Inspect; // anything but Read, so step 0 never trips the check
-    bool haveprev = false;
-    for (int i = 0; i < arr.size(); ++i) {
-        if (!arr.at(i).isObject()) {
-            ctx.error(idx(stepspath, i), QStringLiteral("expected an object"));
-            continue;
-        }
-        const TutorialStep step = parseStep(arr.at(i).toObject(), idx(stepspath, i), ctx);
-        if (haveprev && step.verb == StepVerb::Read && prev == StepVerb::Read)
-            ctx.warn(idx(stepspath, i),
-                     QStringLiteral("two READ steps in a row; the user is reading, not doing"));
-        prev     = step.verb;
-        haveprev = true;
-        act.steps.append(step);
-    }
+    for (int i = 0; i < steps.size(); ++i)
+        act.steps.append(parseStep(steps.at(i), steppaths.at(i), ctx, usedConcepts));
     return act;
 }
 
 } // namespace
-
-/* -------------------------------------------------------------------- */
-
-int TutorialEditorAction::holeCount() const
-{
-    return static_cast<int>(skeleton.count(HOLE));
-}
 
 /* -------------------------------------------------------------------- */
 
@@ -859,26 +617,18 @@ const TutorialStep *TutorialContent::stepById(const QString &id) const
     return nullptr;
 }
 
+const TutorialConcept *TutorialContent::concept(const QString &id) const
+{
+    const auto it = conceptmap.constFind(id);
+    return it == conceptmap.constEnd() ? nullptr : &it.value();
+}
+
 /* -------------------------------------------------------------------- */
 
-QString stepVerbName(StepVerb verb)
+QString stepKindName(StepKind kind)
 {
-    for (const auto &entry : VERB_NAMES)
-        if (entry.verb == verb) return QLatin1String(entry.name);
-    return QStringLiteral("?");
-}
-
-QString validatorTypeName(ValidatorType type)
-{
-    for (const auto &entry : VALIDATOR_NAMES)
-        if (entry.type == type) return QLatin1String(entry.name);
-    return QStringLiteral("?");
-}
-
-QString ruleTypeName(RuleType type)
-{
-    for (const auto &entry : RULE_NAMES)
-        if (entry.type == type) return QLatin1String(entry.name);
+    for (const auto &entry : KIND_NAMES)
+        if (entry.kind == kind) return QLatin1String(entry.name);
     return QStringLiteral("?");
 }
 
@@ -910,6 +660,8 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
                   QStringLiteral("required key is missing; refusing to guess the format"));
         return out;
     }
+    // version 1 used a different step model (seven verbs, validators, holes);
+    // reading it as version 2 would silently misinterpret every step
     if (out.schemaver != Cfg::TUTORIAL_SCHEMA_VERSION) {
         ctx.error(QStringLiteral("schema_version"),
                   QStringLiteral("unsupported schema version %1; this build reads version %2")
@@ -942,22 +694,49 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
                  QStringLiteral("no license recorded; tutorial material is often separately "
                                 "licensed and must carry its terms"));
 
-    const QJsonValue actsval = root.value(QStringLiteral("acts"));
-    if (!actsval.isArray()) {
+    // ---- concepts ----
+    QList<QJsonObject> concepts;
+    QStringList conceptpaths;
+    readObjectArray(root, QStringLiteral("concepts"), QString(), ctx, concepts, conceptpaths);
+    for (int i = 0; i < concepts.size(); ++i) {
+        ctx.checkKeys(concepts.at(i), CONCEPT_KEYS, conceptpaths.at(i));
+        TutorialConcept c;
+        readString(concepts.at(i), QStringLiteral("id"), conceptpaths.at(i), ctx, c.id, true);
+        readString(concepts.at(i), QStringLiteral("term"), conceptpaths.at(i), ctx, c.term, true);
+        readString(concepts.at(i), QStringLiteral("explain"), conceptpaths.at(i), ctx, c.explain,
+                   true);
+        if (c.id.isEmpty()) continue;
+        if (out.conceptmap.contains(c.id))
+            ctx.error(sub(conceptpaths.at(i), QStringLiteral("id")),
+                      QStringLiteral("duplicate concept id \"%1\"").arg(c.id));
+        out.conceptmap.insert(c.id, c);
+    }
+
+    // ---- acts ----
+    QSet<QString> usedConcepts;
+    QList<QJsonObject> acts;
+    QStringList actpaths;
+    if (!readObjectArray(root, QStringLiteral("acts"), QString(), ctx, acts, actpaths)) {
         ctx.error(QStringLiteral("acts"), QStringLiteral("expected an array of acts"));
         return out;
     }
-    const QJsonArray arr = actsval.toArray();
-    if (arr.isEmpty())
-        ctx.error(QStringLiteral("acts"), QStringLiteral("a tutorial needs at "
-                                                         "least one act"));
-    for (int i = 0; i < arr.size(); ++i) {
-        if (!arr.at(i).isObject()) {
-            ctx.error(idx(QStringLiteral("acts"), i), QStringLiteral("expected an object"));
-            continue;
-        }
-        out.actlist.append(parseAct(arr.at(i).toObject(), idx(QStringLiteral("acts"), i), ctx));
-    }
+    if (acts.isEmpty())
+        ctx.error(QStringLiteral("acts"), QStringLiteral("a tutorial needs at least one act"));
+    for (int i = 0; i < acts.size(); ++i)
+        out.actlist.append(parseAct(acts.at(i), actpaths.at(i), ctx, usedConcepts));
+
+    // an annotation pointing at a concept that was never declared would simply
+    // show nothing, which is the kind of silent gap review does not catch
+    for (const auto &id : usedConcepts)
+        if (!id.isEmpty() && !out.conceptmap.contains(id))
+            ctx.error(
+                QStringLiteral("concepts"),
+                QStringLiteral("an annotation references the undeclared concept \"%1\"").arg(id));
+    for (auto it = out.conceptmap.constBegin(); it != out.conceptmap.constEnd(); ++it)
+        if (!usedConcepts.contains(it.key()))
+            ctx.warn(
+                QStringLiteral("concepts"),
+                QStringLiteral("concept \"%1\" is declared but never referenced").arg(it.key()));
 
     // ids address steps in saved progress, so a duplicate would silently
     // resume the wrong step
@@ -982,21 +761,21 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
         }
     }
 
-    // a tutorial that is mostly TYPE has regressed into transcription
-    int gated = 0;
-    int typed = 0;
-    for (const auto &act : out.actlist)
+    // a parameter must rewrite a command the tutorial has actually shown by
+    // then, or the run silently changes nothing
+    QSet<QString> shownCommands;
+    for (const auto &act : out.actlist) {
         for (const auto &step : act.steps) {
-            if (!isGated(step.verb)) continue;
-            ++gated;
-            if (step.verb == StepVerb::Type) ++typed;
+            for (const auto &cmd : step.commands)
+                shownCommands.insert(commandWordOf(cmd.text));
+            for (const auto &param : step.params)
+                if (!param.command.isEmpty() && !shownCommands.contains(param.command))
+                    ctx.error(QStringLiteral("acts"),
+                              QStringLiteral("step \"%1\" binds a parameter to \"%2\", which no "
+                                             "earlier step puts in the script")
+                                  .arg(step.id, param.command));
         }
-    if (gated > 0 && static_cast<double>(typed) > TYPE_SHARE_WARN * gated)
-        ctx.warn(QStringLiteral("acts"),
-                 QStringLiteral("%1 of %2 gated steps are TYPE; a tutorial that is mostly TYPE "
-                                "is transcription, not practice")
-                     .arg(typed)
-                     .arg(gated));
+    }
 
     if (ctx.errors > 0) out.actlist.clear();
     return out;

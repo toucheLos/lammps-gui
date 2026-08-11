@@ -12,95 +12,42 @@
 #ifndef TUTORIALCONTENT_H
 #define TUTORIALCONTENT_H
 
-#include "lammpssyntax.h"
-
-#include <QByteArray>
-#include <QJsonObject>
+#include <QHash>
 #include <QList>
 #include <QString>
 #include <QStringList>
 
 /**
- * @brief What the user is asked to do in one step
+ * @brief What a step asks of the user
  *
- * Every step carries exactly one verb.  The set is deliberately closed and
- * small: each verb has its own prompt shape, its own gate, and its own
- * pedagogical job, and a new verb means new UI, so growing this enum is a
- * design decision rather than a content decision.
+ * Three kinds, deliberately.  The tutorial is a guided walkthrough, not a
+ * quiz: the user is shown what to write and why, and the challenge lives in
+ * the experiments rather than in recall.  See doc/tutorial-mode-redesign.md
+ * for why the earlier seven-verb model was retired.
  */
-enum class StepVerb : quint8 {
-    Read,    ///< nothing to do; gated by the Next button only.  Use sparingly.
-    Type,    ///< type a command from a described intent; the literal is never shown
-    Fill,    ///< complete a skeleton with "___" holes; the workhorse verb
-    Fix,     ///< repair a deliberately broken command
-    Predict, ///< answer a multiple-choice question before running
-    Tune,    ///< change a parameter, re-run, and report what changed
-    Inspect  ///< click each token of a command to reveal its meaning
+enum class StepKind : quint8 {
+    Show,      ///< present commands with annotations; the user inserts them
+    Experiment ///< expose parameters, run the real simulation, show the result
 };
 
 /**
- * @brief How a step's submitted answer is judged
+ * @brief Where a step's illustration comes from
  *
- * The step-level check.  Token- and hole-level checks are expressed with
- * TutorialRule, which a validator may carry a list of.
+ * Deliberately never a bundled screenshot of the application itself: those
+ * go stale the moment the UI changes.  The preferred source is a render of
+ * the user's own system.
  */
-enum class ValidatorType : quint8 {
-    ExactTokens,  ///< canonicalized token-by-token comparison against the rules
-    TokenPattern, ///< per-position pattern or enumeration
-    NumericRange, ///< min / max / ideal with a tolerance
-    NumericValue, ///< a single expected number within a tolerance
-    StyleValid,   ///< the word names a style LAMMPS actually has (package-aware)
-    ParsesClean,  ///< LAMMPS accepts the command with no error (the Fix verb's gate)
-    Choice,       ///< Predict: an index into the step's option list
-    Observation,  ///< Tune: a reported value compared against real thermo output
-    ScriptState   ///< a whole-script assertion evaluated after a checkpoint run
+enum class FigureSource : quint8 {
+    None,    ///< no illustration
+    Snapshot ///< render the user's current system with the image viewer
 };
 
 /**
- * @brief A check applied to one token, one skeleton hole, or one argument
- *
- * Rules are the leaf of the validation tree.  Keeping them separate from
- * TutorialValidator is what lets a single Fill step carry one independent
- * rule per "___" hole and still report which hole was wrong.
+ * @brief Type of an experiment parameter widget
  */
-enum class RuleType : quint8 {
-    Any,          ///< accept anything non-empty; used for holes checked only by parsing
-    Exact,        ///< match one expected word after canonicalization
-    Enumerated,   ///< the word must be one of an allowed list
-    Pattern,      ///< the word must match an anchored regular expression
-    NumericRange, ///< the number must lie within [min, max]
-    NumericValue, ///< the number must equal a value within a tolerance
-    StyleValid    ///< the word must be a known style of a given category
-};
-
-/**
- * @brief Where a step's skeleton text goes in the editor
- */
-enum class TargetLine : quint8 {
-    Append,        ///< append at the end of the buffer
-    ReplaceMarker, ///< replace the line holding a marker comment
-    LineNumber     ///< replace a fixed, 1-based line number
-};
-
-/**
- * @brief Whether a successful step advances on its own
- */
-enum class AdvanceMode : quint8 {
-    Auto,  ///< move to the next step once the answer is accepted
-    Manual ///< wait for the user to press Next, so they can read the payoff
-};
-
-/**
- * @brief Which auxiliary visual a step shows, if any
- *
- * The widgets themselves arrive in later phases; the content format names
- * them from the start so authored tutorials do not need reworking.
- */
-enum class VisualWidget : quint8 {
-    None,        ///< no visual for this step
-    ConceptPlot, ///< live potential/force curve
-    Anatomy,     ///< token-annotated view of the current command
-    Lattice      ///< unit cell and Miller plane preview
+enum class ParamKind : quint8 {
+    Number, ///< a numeric value with a range and a step
+    Choice  ///< one of a fixed set of words
 };
 
 /**
@@ -114,10 +61,10 @@ enum class ContentSeverity : quint8 {
 /**
  * @brief One problem found while loading a tutorial content file
  *
- * Content files are authored by hand, so a rejection has to say *where*.
- * The path is a dotted, index-bearing address into the document, for
- * example @c acts[1].steps[3].validate.min , which is far more useful to an
- * author than a byte offset.
+ * Content files are authored by hand, so a rejection has to say *where*.  The
+ * path is a dotted, index-bearing address into the document, for example
+ * @c acts[1].steps[3].commands[0].text , which is far more useful to an author
+ * than a byte offset.
  */
 struct ContentIssue {
     QString path;                                      ///< dotted path to the offending value
@@ -126,119 +73,108 @@ struct ContentIssue {
 };
 
 /**
- * @brief A check on a single token, hole, or argument
+ * @brief A named idea the tutorial teaches and then stops re-explaining
  *
- * Which members are meaningful depends on @ref type; the rest are ignored.
- * Deliberately an aggregate so the parser and the tests can brace-initialize
- * it the way the syntax engine's ArgSpec is used.
+ * Concepts carry the reminder budget: the first few times a concept appears
+ * its explanation is shown in full, and after that it collapses to something
+ * the user can expand on demand.  Exposure counts live with the user rather
+ * than with the tutorial, so a concept learned once is not re-taught.
  */
-struct TutorialRule {
-    RuleType type = RuleType::Any; ///< which check to apply
-    QString text;                  ///< Exact: the expected word
-    QString pattern;               ///< Pattern: anchored regular expression
-    QStringList choices;           ///< Enumerated: the allowed words
-    StyleCat cat = StyleCat::None; ///< StyleValid: which style category the word must be in
-    double min   = 0.0;            ///< NumericRange: lower bound (inclusive)
-    double max   = 0.0;            ///< NumericRange: upper bound (inclusive)
-    double ideal = 0.0;            ///< the conventional answer, used for the round-trip test
-    /// NumericValue: absolute tolerance; NumericRange: slack allowed outside the bounds
-    double tolerance = 0.0;
-    bool hasIdeal    = false; ///< whether @ref ideal was given
-    /// compare letter case exactly.  Command and style names are matched
-    /// case-insensitively by default, the way LAMMPS treats them; set this for
-    /// the positions where case carries meaning, such as file names and
-    /// variable names.
-    bool caseSensitive = false;
-    QString label; ///< what this position means, e.g. "cutoff distance"
-    QString hint;  ///< nudge shown for this position before the full reveal
+struct TutorialConcept {
+    QString id;      ///< stable identifier referenced by annotations
+    QString term;    ///< short name, e.g. "cutoff"
+    QString explain; ///< the reminder text itself
 };
 
 /**
- * @brief How one step judges the answer it was given
+ * @brief A note attached to one argument position of a command
  */
-struct TutorialValidator {
-    ValidatorType type = ValidatorType::ParsesClean; ///< the step-level check
-    /// per-position checks: one entry per "___" hole for Fill, one per token
-    /// position for ExactTokens and TokenPattern, and a single entry for the
-    /// scalar numeric and style checks
-    QList<TutorialRule> rules;
-    /// also feed the candidate to LAMMPS and require that it parses; this is
-    /// how a numeric answer additionally gains the real parser as an oracle
-    bool alsoRequireParse = false;
-    int correctOption     = -1; ///< Choice: index into TutorialStep::options
-    QString observation;        ///< Observation: the thermo keyword to compare against
-    QString assertion;          ///< ScriptState: the assertion expression to evaluate
-    double tolerance = 0.0;     ///< Observation: relative tolerance on the reported value
+struct TokenNote {
+    int argIndex = 0; ///< 0 is the command word, 1 and up are its arguments
+    QString note;     ///< what this position means here
+    /// what a different value would do; the "syntax effects" half of a lesson,
+    /// and the part a reference manual does not give you
+    QString alternatives;
+    QString conceptId; ///< concept whose reminder budget this note draws on
 };
 
 /**
- * @brief One answer offered by a Predict step
+ * @brief One command line presented by a Show step
+ *
+ * Commands are presented and inserted line by line rather than as a block, so
+ * each line can carry its own explanation and the user sees the script grow
+ * one idea at a time.
+ */
+struct CommandLine {
+    QString text;           ///< the literal command, exactly as it should appear
+    QString explain;        ///< what this line does
+    QList<TokenNote> notes; ///< per-argument annotations
+    QString conceptId;      ///< concept this whole line teaches, if any
+};
+
+/**
+ * @brief One knob an Experiment step exposes
+ *
+ * A parameter is bound to an argument of a command already in the script; the
+ * panel rewrites exactly that token and leaves the rest of the buffer alone.
+ */
+struct TutorialParam {
+    QString id;                         ///< identifier, unique within the step
+    QString label;                      ///< what the widget is called
+    ParamKind kind = ParamKind::Number; ///< which widget to build
+    QString command;                    ///< command whose argument this rewrites, e.g. "timestep"
+    int argIndex   = 1;                 ///< which argument of that command
+    double min     = 0.0;               ///< Number: lowest offered value
+    double max     = 0.0;               ///< Number: highest offered value
+    double step    = 0.0;               ///< Number: increment between offered values
+    double initial = 0.0;               ///< Number: value the widget starts at
+    QStringList choices;                ///< Choice: the offered words
+    QString initialChoice;              ///< Choice: the word the widget starts at
+    QString unit;                       ///< shown beside the widget, e.g. "sigma"
+    QString explain;                    ///< what changing this does
+};
+
+/**
+ * @brief One answer offered by an optional pre-run prediction
  */
 struct TutorialOption {
     QString text;     ///< the answer as shown to the user
-    QString feedback; ///< what this answer teaches, shown whether or not it is correct
+    QString feedback; ///< what this answer teaches, whether or not it is correct
 };
 
 /**
- * @brief The auxiliary visual shown alongside a step
- */
-struct TutorialVisual {
-    VisualWidget widget = VisualWidget::None; ///< which widget, if any
-    /// widget-specific settings, kept opaque on purpose: the loader must not
-    /// need updating every time a visual gains a knob
-    QJsonObject config;
-};
-
-/**
- * @brief What a step puts into the editor before the user acts
- */
-struct TutorialEditorAction {
-    TargetLine target = TargetLine::Append; ///< where the text goes
-    QString skeleton;                       ///< text to insert; "___" marks a hole
-    QString marker;                         ///< ReplaceMarker: the marker to look for
-    int lineNumber        = -1;             ///< LineNumber: 1-based target line
-    int focusPlaceholder  = 0;              ///< which hole gets the cursor
-    bool hasEditorSection = false;          ///< whether the step had an "editor" object at all
-
-    /** @brief Number of "___" holes in the skeleton */
-    int holeCount() const;
-};
-
-/**
- * @brief The prose shown after an answer is judged
+ * @brief An optional question asked immediately before an experiment runs
  *
- * The rejection texts are per-outcome rather than a single "wrong" string so
- * that a too-small and a too-large answer can teach different things.
+ * Never a gate.  It exists because a result lands harder against a stated
+ * expectation, and it can always be dismissed without answering.
  */
-struct TutorialFeedback {
-    QString correct;              ///< shown when the answer is accepted
-    QString wrong;                ///< generic rejection text
-    QString below;                ///< numeric answer under the accepted range
-    QString above;                ///< numeric answer over the accepted range
-    QString parseError;           ///< gloss printed beneath a real LAMMPS error
-    bool useLammpsMessage = true; ///< show the verbatim LAMMPS error above the gloss
+struct TutorialPrediction {
+    bool present = false;          ///< whether the step declared one at all
+    QString question;              ///< the question
+    QList<TutorialOption> options; ///< the offered answers
+    int correctOption = -1;        ///< index of the answer that is right
 };
 
 /**
- * @brief One step: a teach beat, one action, and its verdict
+ * @brief One step of a tutorial
  */
 struct TutorialStep {
     QString id;                     ///< unique within the tutorial
     QString title;                  ///< short heading
     QString teach;                  ///< the teach beat, in the markdown subset
-    StepVerb verb = StepVerb::Read; ///< what the user is asked to do
+    StepKind kind = StepKind::Show; ///< what this step asks of the user
     QString docCommand;             ///< command name for the documentation link
-    QString docStyle;               ///< optional style name refining the documentation link
-    TutorialVisual visual;          ///< auxiliary visual, if any
-    TutorialEditorAction editor;    ///< what goes into the editor
-    TutorialValidator validate;     ///< how the answer is judged
-    TutorialFeedback feedback;      ///< what the verdict says
-    QList<TutorialOption> options;  ///< Predict: the offered answers
-    QStringList hints;              ///< progressive hint ladder, narrowing with each request
-    QString reveal;                 ///< the answer plus its explanation, offered after 3 tries
-    AdvanceMode advance = AdvanceMode::Auto; ///< whether success advances on its own
-    bool skippable      = true;              ///< a false value must be justified in review
-    bool checkpoint     = false;             ///< an Expert-mode stop and a progress anchor
+    QString docStyle;               ///< optional style refining the documentation link
+
+    FigureSource figure = FigureSource::None; ///< illustration, if any
+    QString figureCaption;                    ///< caption shown under it
+
+    QList<CommandLine> commands;   ///< Show: the lines to present and insert
+    QList<TutorialParam> params;   ///< Experiment: the knobs
+    TutorialPrediction prediction; ///< Experiment: the optional pre-run question
+    QString expect;                ///< Experiment: what to look for in the result
+    bool runAfterInsert = false;   ///< Show: offer a run once the lines are in
+    bool checkpoint     = false;   ///< a milestone worth pausing on
 };
 
 /**
@@ -265,10 +201,10 @@ struct TutorialAttribution {
 /**
  * @brief A complete interactive tutorial, parsed from a content file
  *
- * The model is pure data with no Qt Widgets and no LAMMPS dependency: it is
- * built by the parser, validated on load, and then only read.  Adding a
- * tutorial is a content file, never a code change, so nothing here may
- * hardcode anything specific to a particular tutorial.
+ * Pure data with no Qt Widgets and no LAMMPS dependency: built by the parser,
+ * validated on load, then only read.  Adding a tutorial is a content file and
+ * never a code change, so nothing here may hardcode anything specific to a
+ * particular tutorial.
  */
 class TutorialContent {
 public:
@@ -320,37 +256,48 @@ public:
      */
     const TutorialStep *stepById(const QString &id) const;
 
+    /**
+     * @brief Look up a declared concept by its id
+     * @param id concept id, as referenced by an annotation
+     * @return the concept, or nullptr when the id was never declared
+     */
+    const TutorialConcept *concept(const QString &id) const;
+
+    /** @brief Every concept the tutorial declares, keyed by id */
+    const QHash<QString, TutorialConcept> &concepts() const { return conceptmap; }
+
     /// @cond
-    // populated by the parser in tutorialcontent.cpp
     friend TutorialContent parseTutorialJson(const QByteArray &, QList<ContentIssue> *);
     /// @endcond
 
 private:
-    int schemaver = 0;           ///< declared schema version
-    QString ident;               ///< stable identifier
-    QString name;                ///< display title
-    QString coll;                ///< owning collection key
-    int tutno = 0;               ///< 1-based tutorial number in the collection
-    QStringList packages;        ///< required LAMMPS packages
-    QString skeleton;            ///< stripped skeleton file name
-    TutorialAttribution credits; ///< provenance
-    QList<TutorialAct> actlist;  ///< the acts
+    int schemaver = 0;                          ///< declared schema version
+    QString ident;                              ///< stable identifier
+    QString name;                               ///< display title
+    QString coll;                               ///< owning collection key
+    int tutno = 0;                              ///< 1-based tutorial number in the collection
+    QStringList packages;                       ///< required LAMMPS packages
+    QString skeleton;                           ///< stripped skeleton file name
+    TutorialAttribution credits;                ///< provenance
+    QList<TutorialAct> actlist;                 ///< the acts
+    QHash<QString, TutorialConcept> conceptmap; ///< declared concepts by id
 };
+
+class QByteArray;
 
 /**
  * @brief Parse and validate a tutorial content document
  *
- * Parses the JSON, checks it against the schema, and cross-checks the parts
- * the schema alone cannot express: that ids are unique, that each verb is
- * paired with a validator that can actually gate it, that a Fill skeleton has
- * as many "___" holes as it has rules, that a Predict step has at least two
- * options and names a correct one, and that every step which can reject an
- * answer offers a way forward.
+ * Parses the JSON, checks it against the schema, and cross-checks what the
+ * schema alone cannot express: that ids are unique, that a Show step actually
+ * has commands to show, that an Experiment has at least one parameter and a
+ * command to bind it to, that a prediction offering answers also names a
+ * correct one, and that every annotation references a concept that was
+ * declared.
  *
- * Errors leave the corresponding step or act out of the result, so a file
- * with any error must not be presented to a user; check with
- * countContentErrors().  Unknown keys are reported as warnings rather than
- * errors, so a file written for a later schema version still loads.
+ * Errors leave the tutorial empty, so a file with any error is never presented
+ * to a user; check with countContentErrors().  Unknown keys are warnings, so a
+ * file written against a later minor revision still loads.
  *
  * @param bytes raw file contents
  * @param issues optional collector for the findings, in document order
@@ -361,8 +308,8 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
 /**
  * @brief Read and parse a tutorial content file
  *
- * Accepts both a file system path and a Qt resource path (":/..."), so
- * bundled and downloaded content take the same code path.
+ * Accepts both a file system path and a Qt resource path (":/..."), so bundled
+ * and downloaded content take the same code path.
  *
  * @param path file system or Qt resource path
  * @param issues optional collector for the findings
@@ -376,18 +323,14 @@ int countContentErrors(const QList<ContentIssue> &issues);
 /**
  * @brief Format findings as a plain text list, one finding per line
  * @param issues findings to format
- * @param maxShown maximum number listed (-1 = all); a truncated list ends
- *        with an "... and N more" line
+ * @param maxShown maximum number listed (-1 = all); a truncated list ends with
+ *        an "... and N more" line
  * @return the formatted list
  */
 QString formatContentIssues(const QList<ContentIssue> &issues, int maxShown = -1);
 
-/** @brief Name of a step verb as it appears in a content file */
-QString stepVerbName(StepVerb verb);
-/** @brief Name of a validator type as it appears in a content file */
-QString validatorTypeName(ValidatorType type);
-/** @brief Name of a rule type as it appears in a content file */
-QString ruleTypeName(RuleType type);
+/** @brief Name of a step kind as it appears in a content file */
+QString stepKindName(StepKind kind);
 
 #endif // TUTORIALCONTENT_H
 

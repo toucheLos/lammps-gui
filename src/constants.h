@@ -172,7 +172,12 @@ inline const QString VIEW_FILE_MENU = QStringLiteral("viewFileMenu");
 /// Schema version of the tutorial content files this build can read.  Bump it
 /// only when an existing key changes *meaning*: purely additive keys are
 /// tolerated by the loader as warnings, so adding one does not need a bump.
-constexpr int TUTORIAL_SCHEMA_VERSION = 1;
+constexpr int TUTORIAL_SCHEMA_VERSION = 2;
+/// How many times a tutorial concept is explained in full before its
+/// explanation collapses to something the user can expand on demand.  The
+/// count is kept per user and shared across tutorials, so an idea learned once
+/// is not taught again.
+constexpr int CONCEPT_REMINDER_BUDGET = 3;
 
 // ---- Command window ------------------------------------------------------
 constexpr int COMMAND_SCROLLBACK_LINES = 5000; ///< Lines of transcript kept
@@ -280,6 +285,9 @@ inline const QString GROUP_CHARTS   = QStringLiteral("charts");
 inline const QString GROUP_REFORMAT = QStringLiteral("reformat");
 inline const QString GROUP_SNAPSHOT = QStringLiteral("snapshot");
 inline const QString GROUP_TUTORIAL = QStringLiteral("tutorial");
+/// Sub-group of GROUP_TUTORIAL holding per-concept exposure counts, keyed by
+/// concept id.  Shared across tutorials on purpose; see CONCEPT_REMINDER_BUDGET.
+inline const QString GROUP_CONCEPTS = QStringLiteral("concepts");
 
 // ---- keys ----------------------------------------------------------------
 inline const QString ACCELERATOR  = QStringLiteral("accelerator");

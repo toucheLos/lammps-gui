@@ -15,13 +15,9 @@
 
 #include <QSettings>
 
-TutorialEngine::TutorialEngine(const TutorialContent &content, const LammpsSyntax *syntax,
-                               QObject *parent) :
-    QObject(parent), tutorial(content), evaluator(syntax)
+TutorialEngine::TutorialEngine(const TutorialContent &content, QObject *parent) :
+    QObject(parent), tutorial(content)
 {
-    // start on the first step that expert mode allows, so enabling it before
-    // the first stepChanged() does not leave the cursor on a skipped step
-    if (expert && currentStep() && !currentStep()->checkpoint) advance(1);
 }
 
 /* -------------------------------------------------------------------- */
@@ -39,109 +35,78 @@ int TutorialEngine::stepsCompleted() const
     return done + step;
 }
 
-bool TutorialEngine::hasMoreHints() const
+const CommandLine *TutorialEngine::nextCommand() const
 {
     const TutorialStep *s = currentStep();
-    return s && shownHints < s->hints.size();
+    if (!s || inserted >= s->commands.size()) return nullptr;
+    return &s->commands.at(inserted);
 }
 
-bool TutorialEngine::revealAvailable() const
+bool TutorialEngine::allCommandsInserted() const
 {
     const TutorialStep *s = currentStep();
-    if (!s || s->reveal.isEmpty()) return false;
-    // either they worked through the ladder, or they have been wrong enough
-    // times that leaving them stuck would be the only thing we achieved
-    return !hasMoreHints() || wrongAttempts >= REVEAL_AFTER;
-}
-
-bool TutorialEngine::canCheckNow() const
-{
-    const TutorialStep *s = currentStep();
-    if (!s) return false;
-    switch (s->verb) {
-        case StepVerb::Read:
-        case StepVerb::Inspect:
-            return false;
-        case StepVerb::Fix:
-            // gated by parses_clean, which needs the LAMMPS probe (phase 3)
-            return false;
-        case StepVerb::Tune:
-            // gated by a real thermo observation, which needs a completed run
-            return false;
-        case StepVerb::Type:
-        case StepVerb::Fill:
-        case StepVerb::Predict:
-            return true;
-    }
-    return false;
+    return s && inserted >= s->commands.size();
 }
 
 /* -------------------------------------------------------------------- */
 
-bool TutorialEngine::advance(int direction)
+bool TutorialEngine::shouldExplain(const QString &id) const
 {
-    int a = act;
-    int s = step;
+    if (id.isEmpty()) return false;
+    return exposures.value(id, 0) < Cfg::CONCEPT_REMINDER_BUDGET;
+}
 
-    while (true) {
-        s += direction;
-        if (s < 0) {
-            if (a == 0) return false;
-            --a;
-            s = static_cast<int>(tutorial.acts().at(a).steps.size()) - 1;
-            if (s < 0) continue;
-        } else if (a < tutorial.actCount() &&
-                   s >= static_cast<int>(tutorial.acts().at(a).steps.size())) {
-            if (a + 1 >= tutorial.actCount()) {
-                // past the final step: park the cursor there so isFinished() holds
-                act  = tutorial.actCount() - 1;
-                step = static_cast<int>(tutorial.acts().at(act).steps.size());
-                return true;
-            }
-            ++a;
-            s = -1;
-            continue;
-        }
-
-        const TutorialStep *candidate = tutorial.step(a, s);
-        if (!candidate) return false;
-        // expert mode stops only at checkpoints; it hides nothing, it just
-        // stops asking a user who does not need to be asked
-        if (!expert || candidate->checkpoint) {
-            act  = a;
-            step = s;
-            return true;
-        }
+void TutorialEngine::noteConceptsShown(const QStringList &ids)
+{
+    for (const auto &id : ids) {
+        if (id.isEmpty()) continue;
+        // once per step, not once per repaint: stepping back and forth over a
+        // step must not exhaust the budget for a concept seen only once
+        if (countedThisStep.contains(id)) continue;
+        countedThisStep.insert(id);
+        exposures[id] = exposures.value(id, 0) + 1;
     }
 }
 
+/* -------------------------------------------------------------------- */
+
 void TutorialEngine::resetStepState()
 {
-    wrongAttempts = 0;
-    shownHints    = 0;
+    inserted = 0;
+    countedThisStep.clear();
 }
 
 void TutorialEngine::next()
 {
     if (isFinished()) return;
-    const bool moved = advance(1);
+
+    const auto &steps = tutorial.acts().at(act).steps;
+    if (step + 1 < steps.size()) {
+        ++step;
+    } else if (act + 1 < tutorial.actCount()) {
+        ++act;
+        step = 0;
+    } else {
+        // park the cursor past the final step so isFinished() holds
+        ++step;
+    }
     resetStepState();
-    if (moved) emit stepChanged();
+    emit stepChanged();
     if (isFinished()) emit tutorialFinished();
 }
 
 void TutorialEngine::previous()
 {
-    if (!advance(-1)) return;
+    if (step > 0) {
+        --step;
+    } else if (act > 0) {
+        --act;
+        step = qMax(static_cast<int>(tutorial.acts().at(act).steps.size()) - 1, 0);
+    } else {
+        return;
+    }
     resetStepState();
     emit stepChanged();
-}
-
-void TutorialEngine::skip()
-{
-    // deliberately identical to next(): skipping costs nothing and is recorded
-    // nowhere, which is what makes the rest of the tutorial feel non-coercive
-    next();
 }
 
 void TutorialEngine::goToStep(const QString &id)
@@ -159,84 +124,14 @@ void TutorialEngine::goToStep(const QString &id)
     }
 }
 
-QStringList TutorialEngine::nextHint()
+QString TutorialEngine::takeNextCommand()
 {
-    const TutorialStep *s = currentStep();
-    if (!s) return {};
-
-    if (shownHints < s->hints.size()) ++shownHints;
-
-    QStringList shown;
-    for (int i = 0; i < shownHints; ++i)
-        shown << s->hints.at(i);
-    return shown;
-}
-
-/* -------------------------------------------------------------------- */
-
-void TutorialEngine::attachFeedback(StepResult &result) const
-{
-    const TutorialStep *s = currentStep();
-    if (!s) return;
-
-    // a choice carries the chosen option's own explanation, which the
-    // evaluator already filled in; do not overwrite it
-    if (!result.feedback.isEmpty()) return;
-
-    if (result.verdict == Verdict::Correct) {
-        result.feedback = s->feedback.correct;
-        return;
-    }
-    if (result.verdict == Verdict::Unresolved) return;
-
-    // a numeric miss can say something more useful than "wrong"
-    if (result.message.contains(QStringLiteral("below")) && !s->feedback.below.isEmpty())
-        result.feedback = s->feedback.below;
-    else if (result.message.contains(QStringLiteral("above")) && !s->feedback.above.isEmpty())
-        result.feedback = s->feedback.above;
-    else
-        result.feedback = s->feedback.wrong;
-}
-
-StepResult TutorialEngine::submitLine(const QString &line)
-{
-    StepResult res;
-    const TutorialStep *s = currentStep();
-    if (!s) return res;
-
-    res = evaluator.evaluateLine(*s, line);
-    // an undecidable answer is not a wrong one, so it must not count against
-    // the user or push them towards the reveal
-    if (res.verdict == Verdict::Incorrect) ++wrongAttempts;
-    attachFeedback(res);
-    emit verdictReady(res);
-    return res;
-}
-
-StepResult TutorialEngine::submitHoles(const QStringList &values)
-{
-    StepResult res;
-    const TutorialStep *s = currentStep();
-    if (!s) return res;
-
-    res = evaluator.evaluateHoles(*s, values);
-    if (res.verdict == Verdict::Incorrect) ++wrongAttempts;
-    attachFeedback(res);
-    emit verdictReady(res);
-    return res;
-}
-
-StepResult TutorialEngine::submitChoice(int option)
-{
-    StepResult res;
-    const TutorialStep *s = currentStep();
-    if (!s) return res;
-
-    res = evaluator.evaluateChoice(*s, option);
-    if (res.verdict == Verdict::Incorrect) ++wrongAttempts;
-    attachFeedback(res);
-    emit verdictReady(res);
-    return res;
+    const CommandLine *cmd = nextCommand();
+    if (!cmd) return {};
+    const QString text = cmd->text;
+    ++inserted;
+    emit commandInserted(text);
+    return text;
 }
 
 /* -------------------------------------------------------------------- */
@@ -247,43 +142,58 @@ void TutorialEngine::saveProgress() const
 
     QSettings settings;
     settings.beginGroup(Keys::GROUP_TUTORIAL);
+
+    // the cursor is per tutorial, keyed by the step *id* rather than an index,
+    // so inserting or reordering content cannot resume someone in the wrong place
     settings.beginGroup(tutorial.id());
     const TutorialStep *s = currentStep();
-    // the step id, not the index: inserting or reordering content must never
-    // resume a returning user somewhere else entirely
     settings.setValue(Keys::PROGRESS_STEP, s ? s->id : QString());
-    settings.setValue(Keys::EXPERTMODE, expert);
     settings.endGroup();
+
+    // the concept budget is per user and deliberately shared across tutorials:
+    // something learned in tutorial 1 should not be re-taught in tutorial 2
+    settings.beginGroup(Keys::GROUP_CONCEPTS);
+    for (auto it = exposures.constBegin(); it != exposures.constEnd(); ++it)
+        settings.setValue(it.key(), it.value());
+    settings.endGroup();
+
     settings.endGroup();
 }
 
 void TutorialEngine::restoreProgress()
 {
-    if (tutorial.id().isEmpty()) return;
-
     QSettings settings;
     settings.beginGroup(Keys::GROUP_TUTORIAL);
-    settings.beginGroup(tutorial.id());
-    const QString id = settings.value(Keys::PROGRESS_STEP).toString();
-    expert           = settings.value(Keys::EXPERTMODE, false).toBool();
-    settings.endGroup();
+
+    settings.beginGroup(Keys::GROUP_CONCEPTS);
+    exposures.clear();
+    for (const auto &key : settings.childKeys())
+        exposures.insert(key, settings.value(key).toInt());
     settings.endGroup();
 
-    if (id.isEmpty()) return;
+    QString id;
+    if (!tutorial.id().isEmpty()) {
+        settings.beginGroup(tutorial.id());
+        id = settings.value(Keys::PROGRESS_STEP).toString();
+        settings.endGroup();
+    }
+    settings.endGroup();
+
     // a saved id that no longer exists means the content changed under the
     // user; starting over is the only honest option
-    if (!tutorial.stepById(id)) return;
-    goToStep(id);
+    if (!id.isEmpty() && tutorial.stepById(id)) goToStep(id);
 }
 
 void TutorialEngine::resetProgress()
 {
-    if (!tutorial.id().isEmpty()) {
-        QSettings settings;
-        settings.beginGroup(Keys::GROUP_TUTORIAL);
-        settings.remove(tutorial.id());
-        settings.endGroup();
-    }
+    QSettings settings;
+    settings.beginGroup(Keys::GROUP_TUTORIAL);
+    if (!tutorial.id().isEmpty()) settings.remove(tutorial.id());
+    // reminders reset too: a user asking to start over usually means it
+    settings.remove(Keys::GROUP_CONCEPTS);
+    settings.endGroup();
+
+    exposures.clear();
     act  = 0;
     step = 0;
     resetStepState();

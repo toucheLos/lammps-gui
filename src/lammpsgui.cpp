@@ -33,6 +33,7 @@
 #include "syntaxcheck.h"
 #include "tutorialcontent.h"
 #include "tutorialengine.h"
+#include "tutorialeval.h"
 #include "tutorialview.h"
 #include "tutorialwizard.h"
 #include "urldownloader.h"
@@ -527,17 +528,41 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     // the engine outlives the view and is owned by the main window, so closing
     // the panel and reopening it resumes where the user left off
     delete tutorialengine;
-    tutorialengine = new TutorialEngine(content, &syntax, this);
+    tutorialengine = new TutorialEngine(content, this);
     tutorialengine->restoreProgress();
 
     auto *view = new TutorialView(tutorialengine, this);
     view->setAttribute(Qt::WA_DeleteOnClose);
-    // an accepted answer joins the script, so the user finishes the tutorial
-    // holding an input file they actually wrote
-    connect(view, &TutorialView::commandAccepted, this, &LammpsGui::appendTutorialCommand);
+    // the script grows as the tutorial goes, so the user finishes holding an
+    // input file they built themselves rather than a transcript
+    connect(view, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);
+    connect(view, &TutorialView::applyParameter, this, &LammpsGui::applyTutorialParameter);
+    connect(view, &TutorialView::runRequested, this, &LammpsGui::runBuffer);
     connect(tutorialengine, &TutorialEngine::stepChanged, tutorialengine,
             &TutorialEngine::saveProgress);
     view->show();
+}
+
+void LammpsGui::applyTutorialParameter(const QString &command, int argIndex, const QString &value)
+{
+    // rewrite exactly the one argument the experiment is bound to, splicing
+    // over its character span so the rest of the line -- spacing, alignment,
+    // any trailing comment -- survives untouched
+    int lineNumber = -1;
+    if (!findCommandLine(textEdit->toPlainText(), command, lineNumber)) return;
+
+    QTextBlock block = textEdit->document()->findBlockByNumber(lineNumber);
+    if (!block.isValid()) return;
+
+    const QString edited = rewriteArgument(block.text(), argIndex, value);
+    if (edited == block.text()) return;
+
+    QTextCursor cursor(block);
+    cursor.select(QTextCursor::BlockUnderCursor);
+    // BlockUnderCursor takes the leading paragraph separator with it on every
+    // block but the first, so put it back rather than joining two lines
+    cursor.insertText((lineNumber > 0 ? QStringLiteral("\n") : QString()) + edited);
+    textEdit->setHighlight(lineNumber, false);
 }
 
 void LammpsGui::appendTutorialCommand(const QString &text)

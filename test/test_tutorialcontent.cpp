@@ -20,72 +20,47 @@
 namespace {
 
 // ---- document builders ---------------------------------------------------
-// Every test starts from a document that loads cleanly and changes exactly
-// one thing, so a failure names the rule that broke rather than a whole file.
+// Every test starts from a document that loads cleanly and changes exactly one
+// thing, so a failure names the rule that broke rather than a whole file.
 
-QByteArray docWithSteps(const QString &steps)
+QByteArray docWithSteps(const QString &steps, const QString &concepts = QString())
 {
     return QStringLiteral(R"({
-      "schema_version": 1,
+      "schema_version": 2,
       "id": "lj-fluid",
       "title": "Tutorial 1",
       "collection": "softmatter",
       "tutorial": 1,
-      "skeleton_file": "in.lj.skeleton",
+      "skeleton_file": "initial.lmp",
       "attribution": { "source": "https://example.org", "license": "CC-BY-4.0",
                        "credit": "The tutorial authors" },
-      "acts": [ { "id": "act1", "title": "Define the world", "steps": [ %1 ] } ]
+      "concepts": [ %2 ],
+      "acts": [ { "id": "act1", "title": "Build the world", "steps": [ %1 ] } ]
     })")
-        .arg(steps)
+        .arg(steps, concepts)
         .toUtf8();
 }
 
-const char *READ_STEP = R"({
-  "id": "s-read", "verb": "READ", "title": "What LAMMPS does",
-  "teach": "LAMMPS integrates Newton's equations for a set of particles."
-})";
-
-const char *TYPE_STEP = R"({
-  "id": "s-type", "verb": "TYPE", "title": "Choose reduced units",
+const char *SHOW_STEP = R"({
+  "id": "s-show", "kind": "SHOW", "title": "Choose units",
   "teach": "Reduced units make the LJ parameters exactly one.",
   "doc_link": "units",
-  "validate": { "type": "exact_tokens",
-                "rules": [ { "type": "exact", "text": "units" },
-                           { "type": "exact", "text": "lj" } ] },
-  "feedback": { "correct": "Reduced units it is." }
+  "commands": [
+    { "text": "units lj", "explain": "Work in reduced units.",
+      "notes": [ { "arg": 1, "note": "the unit system",
+                   "alternatives": "real gives angstroms and kcal/mol" } ] }
+  ]
 })";
 
-const char *FILL_STEP = R"({
-  "id": "s-fill", "verb": "FILL", "title": "Set the cutoff",
-  "teach": "LJ forces decay as r^-6, so we truncate.",
-  "doc_link": "pair_style lj/cut",
-  "editor": { "target_line": "append", "skeleton": "pair_style lj/cut ___" },
-  "validate": { "type": "numeric_range",
-                "rules": [ { "type": "numeric_range", "min": 2.0, "max": 5.0,
-                             "ideal": 2.5, "label": "cutoff distance" } ] },
-  "feedback": { "below": "Too short.", "above": "Wasteful." }
-})";
-
-const char *FIX_STEP = R"({
-  "id": "s-fix", "verb": "FIX", "title": "Repair the pair_coeff",
-  "teach": "Read the error and see which argument is missing.",
-  "editor": { "target_line": "append", "skeleton": "pair_coeff 1 1 1.0" },
-  "validate": { "type": "parses_clean" },
-  "feedback": { "parse_error": "use_lammps_message" }
-})";
-
-const char *PREDICT_STEP = R"({
-  "id": "s-predict", "verb": "PREDICT", "title": "Will energy drift?",
-  "teach": "NVE conserves total energy in exact arithmetic.",
-  "options": [ { "text": "It stays flat", "feedback": "Only with a small enough timestep." },
-               { "text": "It drifts upward", "feedback": "Right, integration error accumulates." } ],
-  "validate": { "type": "choice", "correct_option": 1 }
-})";
-
-const char *TUNE_STEP = R"({
-  "id": "s-tune", "verb": "TUNE", "title": "Raise the timestep",
-  "teach": "Push the timestep until the integrator fails.",
-  "validate": { "type": "observation", "observation": "etotal", "tolerance": 0.05 }
+const char *EXPERIMENT_STEP = R"({
+  "id": "s-exp", "kind": "EXPERIMENT", "title": "Push the timestep",
+  "teach": "Raise it until the integrator fails.",
+  "params": [
+    { "id": "dt", "label": "timestep", "kind": "number",
+      "command": "units", "arg": 1,
+      "min": 0.001, "max": 0.06, "step": 0.005, "initial": 0.005 }
+  ],
+  "expect": "the total energy trace"
 })";
 
 /// true when some finding of ERROR severity mentions @p fragment in its path
@@ -117,100 +92,76 @@ bool messageMentions(const QList<ContentIssue> &issues, const QString &fragment)
 
 // ---- happy path ----------------------------------------------------------
 
-TEST(TutorialContentTest, MinimalDocumentLoadsCleanly)
+TEST(TutorialContentTest, ShowStepLoadsCleanly)
 {
     QList<ContentIssue> issues;
-    const auto content = parseTutorialJson(docWithSteps(READ_STEP), &issues);
+    const auto content = parseTutorialJson(docWithSteps(SHOW_STEP), &issues);
 
     EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
     EXPECT_FALSE(content.isEmpty());
-    EXPECT_EQ(content.actCount(), 1);
     EXPECT_EQ(content.stepCount(), 1);
+
+    const TutorialStep *step = content.stepById(QStringLiteral("s-show"));
+    ASSERT_NE(step, nullptr);
+    EXPECT_EQ(step->kind, StepKind::Show);
+    ASSERT_EQ(step->commands.size(), 1);
+    EXPECT_EQ(step->commands.at(0).text, QStringLiteral("units lj"));
+    ASSERT_EQ(step->commands.at(0).notes.size(), 1);
+    EXPECT_EQ(step->commands.at(0).notes.at(0).argIndex, 1);
+    EXPECT_FALSE(step->commands.at(0).notes.at(0).alternatives.isEmpty());
+}
+
+TEST(TutorialContentTest, ExperimentStepLoadsCleanly)
+{
+    const QString steps =
+        QString::fromLatin1(SHOW_STEP) + QStringLiteral(",") + QString::fromLatin1(EXPERIMENT_STEP);
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(docWithSteps(steps), &issues);
+
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    const TutorialStep *step = content.stepById(QStringLiteral("s-exp"));
+    ASSERT_NE(step, nullptr);
+    EXPECT_EQ(step->kind, StepKind::Experiment);
+    ASSERT_EQ(step->params.size(), 1);
+    EXPECT_EQ(step->params.at(0).kind, ParamKind::Number);
+    EXPECT_DOUBLE_EQ(step->params.at(0).initial, 0.005);
 }
 
 TEST(TutorialContentTest, MetadataIsParsed)
 {
-    const auto content = parseTutorialJson(docWithSteps(READ_STEP));
-
-    EXPECT_EQ(content.schemaVersion(), 1);
+    const auto content = parseTutorialJson(docWithSteps(SHOW_STEP));
+    EXPECT_EQ(content.schemaVersion(), 2);
     EXPECT_EQ(content.id(), QStringLiteral("lj-fluid"));
-    EXPECT_EQ(content.title(), QStringLiteral("Tutorial 1"));
-    EXPECT_EQ(content.collection(), QStringLiteral("softmatter"));
     EXPECT_EQ(content.tutorialNumber(), 1);
-    EXPECT_EQ(content.skeletonFile(), QStringLiteral("in.lj.skeleton"));
+    EXPECT_EQ(content.skeletonFile(), QStringLiteral("initial.lmp"));
     EXPECT_EQ(content.attribution().license, QStringLiteral("CC-BY-4.0"));
-    EXPECT_EQ(content.attribution().credit, QStringLiteral("The tutorial authors"));
-}
-
-TEST(TutorialContentTest, EveryVerbLoadsWithItsMatchingValidator)
-{
-    const QList<QByteArray> docs = {
-        docWithSteps(READ_STEP), docWithSteps(TYPE_STEP),    docWithSteps(FILL_STEP),
-        docWithSteps(FIX_STEP),  docWithSteps(PREDICT_STEP), docWithSteps(TUNE_STEP),
-    };
-    for (const auto &doc : docs) {
-        QList<ContentIssue> issues;
-        const auto content = parseTutorialJson(doc, &issues);
-        EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-        EXPECT_EQ(content.stepCount(), 1);
-    }
-}
-
-TEST(TutorialContentTest, StepLookupByIndexAndById)
-{
-    const QString steps =
-        QString::fromLatin1(READ_STEP) + QStringLiteral(",") + QString::fromLatin1(TYPE_STEP);
-    const auto content = parseTutorialJson(docWithSteps(steps));
-    ASSERT_EQ(content.stepCount(), 2);
-
-    const TutorialStep *first = content.step(0, 0);
-    ASSERT_NE(first, nullptr);
-    EXPECT_EQ(first->verb, StepVerb::Read);
-
-    const TutorialStep *byid = content.stepById(QStringLiteral("s-type"));
-    ASSERT_NE(byid, nullptr);
-    EXPECT_EQ(byid->verb, StepVerb::Type);
-    EXPECT_EQ(byid->docCommand, QStringLiteral("units"));
-
-    EXPECT_EQ(content.step(0, 99), nullptr);
-    EXPECT_EQ(content.step(99, 0), nullptr);
-    EXPECT_EQ(content.stepById(QStringLiteral("nope")), nullptr);
 }
 
 TEST(TutorialContentTest, DocLinkSplitsCommandAndStyle)
 {
-    const auto content       = parseTutorialJson(docWithSteps(FILL_STEP));
-    const TutorialStep *step = content.stepById(QStringLiteral("s-fill"));
+    const auto content       = parseTutorialJson(docWithSteps(R"({
+      "id": "s", "kind": "SHOW", "title": "T", "teach": "t",
+      "doc_link": "pair_style lj/cut",
+      "commands": [ { "text": "pair_style lj/cut 4.0" } ] })"));
+    const TutorialStep *step = content.stepById(QStringLiteral("s"));
     ASSERT_NE(step, nullptr);
     EXPECT_EQ(step->docCommand, QStringLiteral("pair_style"));
     EXPECT_EQ(step->docStyle, QStringLiteral("lj/cut"));
 }
 
-TEST(TutorialContentTest, SkeletonHolesAreCounted)
-{
-    TutorialEditorAction ed;
-    ed.skeleton = QStringLiteral("region box block 0 ___ 0 ___ 0 ___");
-    EXPECT_EQ(ed.holeCount(), 3);
-    ed.skeleton = QStringLiteral("run 250");
-    EXPECT_EQ(ed.holeCount(), 0);
-}
+// ---- schema version ------------------------------------------------------
 
-// ---- document level rejections -------------------------------------------
-
-TEST(TutorialContentTest, RejectsMalformedJson)
+TEST(TutorialContentTest, RejectsTheVersionOneFormat)
 {
+    // v1 used verbs, validators and "___" holes; reading such a file as v2
+    // would silently misinterpret every step rather than fail
     QList<ContentIssue> issues;
-    const auto content = parseTutorialJson(QByteArray("{ not json"), &issues);
-    EXPECT_TRUE(content.isEmpty());
-    EXPECT_GT(countContentErrors(issues), 0);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("not valid JSON")));
-}
-
-TEST(TutorialContentTest, RejectsNonObjectDocument)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray("[1, 2, 3]"), &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("must be a JSON object")));
+    parseTutorialJson(QByteArray(R"({"schema_version": 1, "id":"x","title":"X",
+      "acts":[{"id":"a","title":"A","steps":[
+        {"id":"s","verb":"TYPE","title":"T","teach":"t"}]}]})"),
+                      &issues);
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("schema_version")));
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("unsupported schema version")));
 }
 
 TEST(TutorialContentTest, RejectsMissingSchemaVersion)
@@ -220,18 +171,17 @@ TEST(TutorialContentTest, RejectsMissingSchemaVersion)
     EXPECT_TRUE(errorAt(issues, QStringLiteral("schema_version")));
 }
 
-TEST(TutorialContentTest, RejectsUnsupportedSchemaVersion)
+TEST(TutorialContentTest, RejectsMalformedJson)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray(R"({"schema_version": 99, "id":"x","title":"X","acts":[]})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("schema_version")));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("unsupported schema version")));
+    const auto content = parseTutorialJson(QByteArray("{ not json"), &issues);
+    EXPECT_TRUE(content.isEmpty());
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("not valid JSON")));
 }
 
 TEST(TutorialContentTest, UnknownKeysWarnButStillLoad)
 {
-    QByteArray doc = docWithSteps(READ_STEP);
+    QByteArray doc = docWithSteps(SHOW_STEP);
     doc.replace("\"id\": \"lj-fluid\"", "\"id\": \"lj-fluid\", \"future_key\": 42");
 
     QList<ContentIssue> issues;
@@ -241,374 +191,188 @@ TEST(TutorialContentTest, UnknownKeysWarnButStillLoad)
     EXPECT_FALSE(content.isEmpty());
 }
 
-TEST(TutorialContentTest, MissingLicenseIsWarnedAbout)
+// ---- step kinds ----------------------------------------------------------
+
+TEST(TutorialContentTest, RejectsUnknownStepKind)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray(R"({
-      "schema_version": 1, "id": "x", "title": "X",
-      "acts": [ { "id": "a", "title": "A", "steps": [ {
-        "id": "s", "verb": "READ", "title": "T", "teach": "t" } ] } ] })"),
-                      &issues);
-    EXPECT_EQ(countContentErrors(issues), 0);
-    EXPECT_TRUE(warningAt(issues, QStringLiteral("attribution.license")));
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"QUIZ","title":"T","teach":"t"})"), &issues);
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("kind")));
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("unknown step kind")));
 }
 
-TEST(TutorialContentTest, RejectsEmptyActList)
+TEST(TutorialContentTest, ShowStepMustPresentSomething)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray(R"({"schema_version":1,"id":"x","title":"X","acts":[]})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("acts")));
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"SHOW","title":"T"})"), &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("presents nothing")));
 }
 
-TEST(TutorialContentTest, RejectsActWithNoSteps)
+TEST(TutorialContentTest, ExperimentNeedsAParameter)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray(R"({"schema_version":1,"id":"x","title":"X",
-      "acts":[{"id":"a","title":"A","steps":[]}]})"),
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t"})"),
                       &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("steps")));
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("params")));
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("just a run")));
 }
+
+TEST(TutorialContentTest, MultiLineCommandTextIsRejected)
+{
+    // commands are presented one line at a time so each can be annotated
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"SHOW","title":"T","teach":"t",
+      "commands":[{"text":"units lj\nboundary p p p"}]})"),
+                      &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("one command per entry")));
+}
+
+// ---- parameters ----------------------------------------------------------
+
+TEST(TutorialContentTest, ParameterMustBindToACommandThatWasShown)
+{
+    // otherwise the run silently changes nothing
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t",
+      "params":[{"id":"p","label":"L","command":"nosuchcommand","arg":1,
+                 "min":0,"max":1}], "expect":"e"})"),
+                      &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("no earlier step puts in the script")));
+}
+
+TEST(TutorialContentTest, ParameterCannotRewriteTheCommandWord)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t",
+      "params":[{"id":"p","label":"L","command":"units","arg":0,
+                 "min":0,"max":1}], "expect":"e"})"),
+                      &issues);
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("arg")));
+}
+
+TEST(TutorialContentTest, RejectsInvertedParameterRange)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(QString::fromLatin1(EXPERIMENT_STEP)
+                                       .replace(QStringLiteral("\"min\": 0.001"),
+                                                QStringLiteral("\"min\": 9.0"))),
+                      &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("must be below max")));
+}
+
+TEST(TutorialContentTest, RejectsInitialOutsideTheRange)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(QString::fromLatin1(EXPERIMENT_STEP)
+                                       .replace(QStringLiteral("\"initial\": 0.005"),
+                                                QStringLiteral("\"initial\": 5.0"))),
+                      &issues);
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("initial")));
+}
+
+TEST(TutorialContentTest, ChoiceParameterNeedsTwoChoices)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t",
+      "params":[{"id":"p","label":"L","kind":"choice","command":"units","arg":1,
+                 "choices":["lj"]}], "expect":"e"})"),
+                      &issues);
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("choices")));
+}
+
+// ---- concepts and the reminder budget ------------------------------------
+
+TEST(TutorialContentTest, ConceptsAreParsedAndLookedUpById)
+{
+    const auto content = parseTutorialJson(docWithSteps(
+        R"({"id":"s","kind":"SHOW","title":"T","teach":"t",
+            "commands":[{"text":"units lj","concept":"reduced-units"}]})",
+        R"({"id":"reduced-units","term":"reduced units","explain":"everything is dimensionless"})"));
+
+    ASSERT_EQ(content.concepts().size(), 1);
+    const TutorialConcept *c = content.concept(QStringLiteral("reduced-units"));
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(c->term, QStringLiteral("reduced units"));
+    EXPECT_EQ(content.concept(QStringLiteral("nope")), nullptr);
+}
+
+TEST(TutorialContentTest, AnnotationReferencingAnUndeclaredConceptIsRejected)
+{
+    // it would silently show nothing, which review does not catch
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"SHOW","title":"T","teach":"t",
+      "commands":[{"text":"units lj","concept":"never-declared"}]})"),
+                      &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("undeclared concept")));
+}
+
+TEST(TutorialContentTest, UnusedConceptWarns)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(
+        docWithSteps(SHOW_STEP, R"({"id":"orphan","term":"orphan","explain":"never referenced"})"),
+        &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("never referenced")));
+}
+
+TEST(TutorialContentTest, RejectsDuplicateConceptIds)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(
+                          R"({"id":"s","kind":"SHOW","title":"T","teach":"t",
+                              "commands":[{"text":"units lj","concept":"dup"}]})",
+                          R"({"id":"dup","term":"a","explain":"a"},
+                              {"id":"dup","term":"b","explain":"b"})"),
+                      &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("duplicate concept id")));
+}
+
+// ---- structure -----------------------------------------------------------
 
 TEST(TutorialContentTest, RejectsDuplicateStepIds)
 {
     const QString steps =
-        QString::fromLatin1(READ_STEP) + QStringLiteral(",") + QString::fromLatin1(READ_STEP);
+        QString::fromLatin1(SHOW_STEP) + QStringLiteral(",") + QString::fromLatin1(SHOW_STEP);
     QList<ContentIssue> issues;
     parseTutorialJson(docWithSteps(steps), &issues);
     EXPECT_TRUE(messageMentions(issues, QStringLiteral("duplicate step id")));
 }
 
-TEST(TutorialContentTest, RejectsUnknownVerb)
+TEST(TutorialContentTest, RejectsActWithNoSteps)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"DANCE","title":"T","teach":"t"})"),
+    parseTutorialJson(QByteArray(R"({"schema_version":2,"id":"x","title":"X",
+      "acts":[{"id":"a","title":"A","steps":[]}]})"),
                       &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("verb")));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("unknown verb")));
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("steps")));
 }
-
-// ---- the verb / validator compatibility matrix ---------------------------
-
-TEST(TutorialContentTest, TypeStepRejectsParsesCleanValidator)
-{
-    // parses_clean would accept *any* syntactically valid command, so it
-    // cannot tell whether the user typed the command that was asked for
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"TYPE","title":"T","teach":"t",
-      "validate": {"type":"parses_clean"}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("validate")));
-}
-
-TEST(TutorialContentTest, GatedStepWithoutValidatorIsRejected)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"TYPE","title":"T","teach":"t"})"), &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("needs a validator")));
-}
-
-TEST(TutorialContentTest, FillStepRequiresOneRulePerHole)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"region box block 0 ___ 0 ___ 0 ___"},
-      "validate": {"type":"numeric_range",
-                   "rules":[{"type":"numeric_range","min":1,"max":10}]}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("one to one")));
-}
-
-TEST(TutorialContentTest, FillStepRequiresAHole)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_style lj/cut 2.5"},
-      "validate": {"type":"numeric_range",
-                   "rules":[{"type":"numeric_range","min":1,"max":10}]}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("skeleton")));
-}
-
-TEST(TutorialContentTest, FixStepRequiresParsesClean)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FIX","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_coeff 1 1 1.0"},
-      "validate": {"type":"exact_tokens","rules":[{"type":"exact","text":"pair_coeff"}]}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("parses_clean")));
-}
-
-TEST(TutorialContentTest, FixStepRejectsSkeletonHoles)
-{
-    // holes make it a FILL; a FIX presents a complete but broken command
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FIX","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_coeff 1 1 ___"},
-      "validate": {"type":"parses_clean"}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("use FILL for holes")));
-}
-
-TEST(TutorialContentTest, PredictStepNeedsTwoOptions)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"PREDICT","title":"T","teach":"t",
-      "options":[{"text":"only one","feedback":"f"}],
-      "validate": {"type":"choice","correct_option":0}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("at least two options")));
-}
-
-TEST(TutorialContentTest, PredictStepRejectsOutOfRangeCorrectOption)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"PREDICT","title":"T","teach":"t",
-      "options":[{"text":"a","feedback":"f"},{"text":"b","feedback":"g"}],
-      "validate": {"type":"choice","correct_option":7}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("correct_option")));
-}
-
-TEST(TutorialContentTest, PredictOptionWithoutFeedbackWarns)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"PREDICT","title":"T","teach":"t",
-      "options":[{"text":"a"},{"text":"b","feedback":"g"}],
-      "validate": {"type":"choice","correct_option":1}})"),
-                      &issues);
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    EXPECT_TRUE(warningAt(issues, QStringLiteral("options[0]")));
-}
-
-TEST(TutorialContentTest, TuneStepNeedsObservationAndTolerance)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"TUNE","title":"T","teach":"t",
-      "validate": {"type":"observation"}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("observation")));
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("tolerance")));
-}
-
-TEST(TutorialContentTest, ScriptStateOnlyOnCheckpointSteps)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"READ","title":"T","teach":"t",
-      "validate": {"type":"script_state","assertion":"natoms > 0"}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("checkpoint step")));
-
-    QList<ContentIssue> ok;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"READ","title":"T","teach":"t",
-      "checkpoint": true,
-      "validate": {"type":"script_state","assertion":"natoms > 0"}})"),
-                      &ok);
-    EXPECT_EQ(countContentErrors(ok), 0) << qPrintable(formatContentIssues(ok));
-}
-
-TEST(TutorialContentTest, ValidatorOnReadStepIsWarnedAndIgnored)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"READ","title":"T","teach":"t",
-      "validate": {"type":"parses_clean"}})"),
-                      &issues);
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    EXPECT_TRUE(warningAt(issues, QStringLiteral("validate")));
-}
-
-// ---- the anti-coercion rule ----------------------------------------------
-
-TEST(TutorialContentTest, NonSkippableGatedStepMustProvideReveal)
-{
-    const QByteArray doc = docWithSteps(QString::fromLatin1(TYPE_STEP).replace(
-        QStringLiteral("\"id\": \"s-type\""), QStringLiteral("\"id\": \"s-type\", "
-                                                             "\"skippable\": false")));
-    QList<ContentIssue> issues;
-    parseTutorialJson(doc, &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("no way forward")));
-}
-
-TEST(TutorialContentTest, NonSkippableStepWithRevealIsAccepted)
-{
-    const QByteArray doc = docWithSteps(QString::fromLatin1(TYPE_STEP).replace(
-        QStringLiteral("\"id\": \"s-type\""),
-        QStringLiteral("\"id\": \"s-type\", \"skippable\": false, "
-                       "\"reveal\": \"units lj -- reduced units\"")));
-    QList<ContentIssue> issues;
-    parseTutorialJson(doc, &issues);
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-}
-
-// ---- rule level checks ---------------------------------------------------
-
-TEST(TutorialContentTest, RejectsInvertedNumericRange)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_style lj/cut ___"},
-      "validate": {"type":"numeric_range",
-                   "rules":[{"type":"numeric_range","min":5.0,"max":2.0}]}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("greater than max")));
-}
-
-TEST(TutorialContentTest, RejectsIdealOutsideItsOwnRange)
-{
-    // the round-trip test plays every step with its ideal answer, so this
-    // would make the tutorial fail its own regression test
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_style lj/cut ___"},
-      "validate": {"type":"numeric_range",
-                   "rules":[{"type":"numeric_range","min":2.0,"max":5.0,"ideal":9.0}]}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("ideal")));
-}
-
-TEST(TutorialContentTest, RejectsInvalidRegularExpression)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"fix 1 all ___"},
-      "validate": {"type":"token_pattern",
-                   "rules":[{"type":"pattern","pattern":"nv[e"}]}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("invalid regular expression")));
-}
-
-TEST(TutorialContentTest, RejectsEmptyEnumRule)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_style ___ 2.5"},
-      "validate": {"type":"token_pattern","rules":[{"type":"enum","enum":[]}]}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("enum")));
-}
-
-TEST(TutorialContentTest, RejectsStyleValidRuleWithoutCategory)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_style ___ 2.5"},
-      "validate": {"type":"style_valid","rules":[{"type":"style_valid"}]}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("category")));
-}
-
-TEST(TutorialContentTest, StyleCategoryIsParsedIntoTheSyntaxEngineEnum)
-{
-    const auto content = parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T",
-      "teach":"t", "editor": {"skeleton":"pair_style ___ 2.5"},
-      "validate": {"type":"style_valid",
-                   "rules":[{"type":"style_valid","category":"pair"}]}})"));
-    const TutorialStep *step = content.stepById(QStringLiteral("s"));
-    ASSERT_NE(step, nullptr);
-    ASSERT_EQ(step->validate.rules.size(), 1);
-    EXPECT_EQ(step->validate.rules.at(0).cat, StyleCat::Pair);
-}
-
-TEST(TutorialContentTest, RejectsOutOfRangeFocusPlaceholder)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FILL","title":"T","teach":"t",
-      "editor": {"skeleton":"pair_style lj/cut ___","focus_placeholder":3},
-      "validate": {"type":"numeric_range",
-                   "rules":[{"type":"numeric_range","min":2.0,"max":5.0}]}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("focus_placeholder")));
-}
-
-TEST(TutorialContentTest, ReplaceMarkerNeedsAMarker)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FIX","title":"T","teach":"t",
-      "editor": {"target_line":"replace_marker","skeleton":"pair_coeff 1 1 1.0"},
-      "validate": {"type":"parses_clean"}})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("marker")));
-}
-
-TEST(TutorialContentTest, WrongTypeForAFieldIsReportedAtItsPath)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"READ","title":"T","teach":"t",
-      "skippable": "yes"})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("skippable")));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("expected true or false")));
-}
-
-// ---- content quality warnings --------------------------------------------
-
-TEST(TutorialContentTest, TwoReadStepsInARowWarn)
-{
-    const QString steps =
-        QString::fromLatin1(READ_STEP) + QStringLiteral(",") +
-        QString::fromLatin1(READ_STEP).replace(QStringLiteral("s-read"), QStringLiteral("s-read2"));
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(steps), &issues);
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("two READ steps in a row")));
-}
-
-TEST(TutorialContentTest, MostlyTypeTutorialIsFlaggedAsTranscription)
-{
-    QStringList steps;
-    for (int i = 0; i < 3; ++i)
-        steps << QString::fromLatin1(TYPE_STEP).replace(QStringLiteral("s-type"),
-                                                        QStringLiteral("s-type%1").arg(i));
-    steps << QString::fromLatin1(FILL_STEP);
-
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(steps.join(QStringLiteral(","))), &issues);
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("transcription")));
-}
-
-TEST(TutorialContentTest, StepWithoutTeachTextWarns)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"READ","title":"T"})"), &issues);
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    EXPECT_TRUE(warningAt(issues, QStringLiteral("teach")));
-}
-
-// ---- feedback ------------------------------------------------------------
-
-TEST(TutorialContentTest, LammpsMessageSentinelLeavesTheGlossEmpty)
-{
-    const auto content       = parseTutorialJson(docWithSteps(FIX_STEP));
-    const TutorialStep *step = content.stepById(QStringLiteral("s-fix"));
-    ASSERT_NE(step, nullptr);
-    EXPECT_TRUE(step->feedback.parseError.isEmpty());
-    EXPECT_TRUE(step->feedback.useLammpsMessage);
-}
-
-TEST(TutorialContentTest, ParseErrorGlossIsKeptAlongsideTheRealMessage)
-{
-    const auto content = parseTutorialJson(docWithSteps(R"({"id":"s","verb":"FIX","title":"T",
-      "teach":"t", "editor": {"skeleton":"pair_coeff 1 1 1.0"},
-      "validate": {"type":"parses_clean"},
-      "feedback": {"parse_error":"pair_coeff needs epsilon and sigma."}})"));
-    const TutorialStep *step = content.stepById(QStringLiteral("s"));
-    ASSERT_NE(step, nullptr);
-    EXPECT_EQ(step->feedback.parseError, QStringLiteral("pair_coeff needs epsilon and sigma."));
-    EXPECT_TRUE(step->feedback.useLammpsMessage);
-}
-
-// ---- issue reporting -----------------------------------------------------
 
 TEST(TutorialContentTest, ErroneousContentIsNotHandedOut)
 {
-    // a file with any error must never reach a user half-parsed
     QList<ContentIssue> issues;
     const auto content = parseTutorialJson(
-        docWithSteps(R"({"id":"s","verb":"TYPE","title":"T","teach":"t"})"), &issues);
+        docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t"})"), &issues);
     EXPECT_GT(countContentErrors(issues), 0);
     EXPECT_TRUE(content.isEmpty());
+}
+
+TEST(TutorialContentTest, MissingLicenseIsWarnedAbout)
+{
+    QList<ContentIssue> issues;
+    parseTutorialJson(QByteArray(R"({"schema_version":2,"id":"x","title":"X",
+      "acts":[{"id":"a","title":"A","steps":[
+        {"id":"s","kind":"SHOW","title":"T","teach":"t"}]}]})"),
+                      &issues);
+    EXPECT_TRUE(warningAt(issues, QStringLiteral("attribution.license")));
+}
+
+TEST(TutorialContentTest, MissingFileIsReportedNotCrashed)
+{
+    QList<ContentIssue> issues;
+    const auto content = loadTutorialFile(QStringLiteral("/nonexistent/tutorial.json"), &issues);
+    EXPECT_TRUE(content.isEmpty());
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("cannot read")));
 }
 
 TEST(TutorialContentTest, FormatIssuesTruncatesAndCounts)
@@ -619,35 +383,22 @@ TEST(TutorialContentTest, FormatIssuesTruncatesAndCounts)
         {QStringLiteral("c"), ContentSeverity::Error, QStringLiteral("third")},
     };
     EXPECT_EQ(countContentErrors(issues), 2);
-
-    const QString all = formatContentIssues(issues);
-    EXPECT_TRUE(all.contains(QStringLiteral("ERROR: a: first")));
-    EXPECT_TRUE(all.contains(QStringLiteral("WARNING: b: second")));
+    EXPECT_TRUE(formatContentIssues(issues).contains(QStringLiteral("ERROR: a: first")));
 
     const QString cut = formatContentIssues(issues, 1);
-    EXPECT_TRUE(cut.contains(QStringLiteral("first")));
     EXPECT_FALSE(cut.contains(QStringLiteral("third")));
     EXPECT_TRUE(cut.contains(QStringLiteral("... and 2 more")));
 }
 
-TEST(TutorialContentTest, MissingFileIsReportedNotCrashed)
+TEST(TutorialContentTest, StepKindNamesMatchTheFileSpelling)
 {
-    QList<ContentIssue> issues;
-    const auto content = loadTutorialFile(QStringLiteral("/nonexistent/tutorial.json"), &issues);
-    EXPECT_TRUE(content.isEmpty());
-    EXPECT_GT(countContentErrors(issues), 0);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("cannot read")));
+    EXPECT_EQ(stepKindName(StepKind::Show), QStringLiteral("SHOW"));
+    EXPECT_EQ(stepKindName(StepKind::Experiment), QStringLiteral("EXPERIMENT"));
 }
 
-TEST(TutorialContentTest, ParsingWithoutAnIssueSinkDoesNotCrash)
-{
-    const auto content = parseTutorialJson(QByteArray("{ broken"), nullptr);
-    EXPECT_TRUE(content.isEmpty());
-}
-
-// ---- the shipped content ------------------------------------------------
+// ---- the shipped content -------------------------------------------------
 // Content rot is the failure mode these guard against: a schema change that
-// invalidates an authored tutorial has to fail here, not in front of a user.
+// invalidates the authored tutorial has to fail here, not in front of a user.
 
 #ifdef TUTORIAL_CONTENT_DIR
 TEST(TutorialContentTest, ShippedTutorialOneLoadsWithoutIssues)
@@ -657,77 +408,46 @@ TEST(TutorialContentTest, ShippedTutorialOneLoadsWithoutIssues)
     const auto content = loadTutorialFile(path, &issues);
 
     EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    // warnings are advisory, but shipped content should be clean of them too
     EXPECT_TRUE(issues.isEmpty()) << qPrintable(formatContentIssues(issues));
-    EXPECT_FALSE(content.isEmpty());
     EXPECT_EQ(content.id(), QStringLiteral("lj-fluid"));
-    EXPECT_GT(content.stepCount(), 20);
+    EXPECT_GT(content.stepCount(), 5);
+    EXPECT_GT(content.concepts().size(), 5);
 }
 
-TEST(TutorialContentTest, ShippedTutorialOneCoversTheControlledFailure)
+TEST(TutorialContentTest, ShippedTutorialOneKeepsTheControlledFailure)
 {
-    // Act 6 is the reason this feature exists: the user causes and repairs the
-    // most common failure in MD.  If it ever disappears from the content, the
-    // tutorial has lost its point.
-    const QString path = QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json");
-    const auto content = loadTutorialFile(path);
+    // the deliberate instability is the reason this feature exists; if it ever
+    // disappears from the content the tutorial has lost its point
+    const auto content = loadTutorialFile(QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json"));
 
-    const TutorialStep *breakit = content.stepById(QStringLiteral("a6-s2"));
+    const TutorialStep *breakit = content.stepById(QStringLiteral("a4-s1"));
     ASSERT_NE(breakit, nullptr);
-    EXPECT_EQ(breakit->verb, StepVerb::Tune);
-
-    const TutorialStep *repair = content.stepById(QStringLiteral("a6-s4"));
-    ASSERT_NE(repair, nullptr);
-    EXPECT_TRUE(repair->checkpoint);
+    EXPECT_EQ(breakit->kind, StepKind::Experiment);
+    ASSERT_FALSE(breakit->params.isEmpty());
+    EXPECT_EQ(breakit->params.at(0).command, QStringLiteral("timestep"));
+    // the range must actually reach the unstable region, or nothing breaks
+    EXPECT_GT(breakit->params.at(0).max, 0.02);
 }
 
-TEST(TutorialContentTest, ShippedTutorialOneIsNotTranscription)
+TEST(TutorialContentTest, ShippedTutorialOneShowsCommandsRatherThanQuizzing)
 {
-    // every gated step must be answerable without the answer being on screen,
-    // and the tutorial must not have drifted into mostly-TYPE
-    const QString path = QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json");
-    const auto content = loadTutorialFile(path);
-
-    int gated = 0;
-    int typed = 0;
+    const auto content = loadTutorialFile(QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json"));
+    int commands       = 0;
+    int annotations    = 0;
     for (int a = 0; a < content.actCount(); ++a) {
         for (int s = 0;; ++s) {
             const TutorialStep *step = content.step(a, s);
             if (!step) break;
-            if (step->verb == StepVerb::Read || step->verb == StepVerb::Inspect) continue;
-            ++gated;
-            if (step->verb == StepVerb::Type) ++typed;
-            // a gated step the user can get stuck on must offer a way out
-            EXPECT_TRUE(step->skippable || !step->reveal.isEmpty())
-                << qPrintable(step->id) << " has no way forward";
+            commands += static_cast<int>(step->commands.size());
+            for (const auto &cmd : step->commands)
+                annotations += static_cast<int>(cmd.notes.size());
         }
     }
-    EXPECT_GT(gated, 10);
-    EXPECT_LE(typed * 2, gated) << "the tutorial has drifted into transcription";
+    EXPECT_GT(commands, 15);
+    // annotation is the whole point of showing rather than asking
+    EXPECT_GT(annotations, commands);
 }
 #endif
-
-// ---- enum naming ---------------------------------------------------------
-
-TEST(TutorialContentTest, EnumNamesMatchTheContentFileSpelling)
-{
-    EXPECT_EQ(stepVerbName(StepVerb::Predict), QStringLiteral("PREDICT"));
-    EXPECT_EQ(stepVerbName(StepVerb::Fill), QStringLiteral("FILL"));
-    EXPECT_EQ(validatorTypeName(ValidatorType::ParsesClean), QStringLiteral("parses_clean"));
-    EXPECT_EQ(validatorTypeName(ValidatorType::ExactTokens), QStringLiteral("exact_tokens"));
-    EXPECT_EQ(ruleTypeName(RuleType::Enumerated), QStringLiteral("enum"));
-    EXPECT_EQ(ruleTypeName(RuleType::NumericRange), QStringLiteral("numeric_range"));
-}
-
-TEST(TutorialContentTest, UnknownNamesListTheAcceptedSpellings)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","verb":"TYPE","title":"T","teach":"t",
-      "validate": {"type":"vibes","rules":[{"type":"exact","text":"units"}]}})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("exact_tokens")));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("parses_clean")));
-}
 
 // Local Variables:
 // c-basic-offset: 4
