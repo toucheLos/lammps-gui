@@ -645,6 +645,68 @@ TEST(TutorialContentTest, ParsingWithoutAnIssueSinkDoesNotCrash)
     EXPECT_TRUE(content.isEmpty());
 }
 
+// ---- the shipped content ------------------------------------------------
+// Content rot is the failure mode these guard against: a schema change that
+// invalidates an authored tutorial has to fail here, not in front of a user.
+
+#ifdef TUTORIAL_CONTENT_DIR
+TEST(TutorialContentTest, ShippedTutorialOneLoadsWithoutIssues)
+{
+    const QString path = QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json");
+    QList<ContentIssue> issues;
+    const auto content = loadTutorialFile(path, &issues);
+
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    // warnings are advisory, but shipped content should be clean of them too
+    EXPECT_TRUE(issues.isEmpty()) << qPrintable(formatContentIssues(issues));
+    EXPECT_FALSE(content.isEmpty());
+    EXPECT_EQ(content.id(), QStringLiteral("lj-fluid"));
+    EXPECT_GT(content.stepCount(), 20);
+}
+
+TEST(TutorialContentTest, ShippedTutorialOneCoversTheControlledFailure)
+{
+    // Act 6 is the reason this feature exists: the user causes and repairs the
+    // most common failure in MD.  If it ever disappears from the content, the
+    // tutorial has lost its point.
+    const QString path = QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json");
+    const auto content = loadTutorialFile(path);
+
+    const TutorialStep *breakit = content.stepById(QStringLiteral("a6-s2"));
+    ASSERT_NE(breakit, nullptr);
+    EXPECT_EQ(breakit->verb, StepVerb::Tune);
+
+    const TutorialStep *repair = content.stepById(QStringLiteral("a6-s4"));
+    ASSERT_NE(repair, nullptr);
+    EXPECT_TRUE(repair->checkpoint);
+}
+
+TEST(TutorialContentTest, ShippedTutorialOneIsNotTranscription)
+{
+    // every gated step must be answerable without the answer being on screen,
+    // and the tutorial must not have drifted into mostly-TYPE
+    const QString path = QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json");
+    const auto content = loadTutorialFile(path);
+
+    int gated = 0;
+    int typed = 0;
+    for (int a = 0; a < content.actCount(); ++a) {
+        for (int s = 0;; ++s) {
+            const TutorialStep *step = content.step(a, s);
+            if (!step) break;
+            if (step->verb == StepVerb::Read || step->verb == StepVerb::Inspect) continue;
+            ++gated;
+            if (step->verb == StepVerb::Type) ++typed;
+            // a gated step the user can get stuck on must offer a way out
+            EXPECT_TRUE(step->skippable || !step->reveal.isEmpty())
+                << qPrintable(step->id) << " has no way forward";
+        }
+    }
+    EXPECT_GT(gated, 10);
+    EXPECT_LE(typed * 2, gated) << "the tutorial has drifted into transcription";
+}
+#endif
+
 // ---- enum naming ---------------------------------------------------------
 
 TEST(TutorialContentTest, EnumNamesMatchTheContentFileSpelling)

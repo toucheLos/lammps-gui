@@ -156,6 +156,10 @@ add_executable(test_tutorialcontent
 )
 
 target_include_directories(test_tutorialcontent PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# the shipped content files are read from the source tree rather than from the
+# Qt resource system, so the test does not need the compiled-in resources
+target_compile_definitions(test_tutorialcontent PRIVATE
+  TUTORIAL_CONTENT_DIR="${CMAKE_SOURCE_DIR}/resources/tutorials")
 target_link_libraries(test_tutorialcontent PRIVATE GTest::gtest_main Qt6::Core)
 
 gtest_discover_tests(test_tutorialcontent)
