@@ -177,6 +177,11 @@ void TutorialView::showCurrentStep()
     // a step with commands hands them to the editor one at a time; the callout
     // never shows the code itself, only what it means
     const QList<CommandLine> group = engine->nextGroup();
+    // the budget is spent once per group rather than once per line: two
+    // pair_coeff lines that travel together each carry their own meaning, and
+    // suppressing the second because the first just used up "pair_coeff" threw
+    // away the mixing rules
+    QStringList wordsThisGroup;
     for (const auto &cmd : group) {
         // the command word gets a budget of one.  By the sixth "region" the
         // prose is noise, so a repeat shows the per-argument notes alone --
@@ -209,8 +214,10 @@ void TutorialView::showCurrentStep()
         }
         if (!cmd.conceptId.isEmpty()) shownConcepts << cmd.conceptId;
         engine->noteConceptsShown(shownConcepts);
-        engine->noteCommandShown(word);
+        wordsThisGroup << word;
     }
+    for (const auto &word : wordsThisGroup)
+        engine->noteCommandShown(word);
 
     coach->setContent(QStringLiteral("%1 -- %2").arg(engine->content().title(), act.title),
                       step->title, body);
