@@ -565,6 +565,8 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
             &TutorialView::commandCommitted);
     connect(tutorialengine, &TutorialEngine::stepChanged, tutorialengine,
             &TutorialEngine::saveProgress);
+    // a step that points at the Run button waits for the run rather than for Next
+    connect(this, &LammpsGui::runFinished, tutorialview, &TutorialView::runFinished);
 
     tutorialview->start();
 }
@@ -2122,12 +2124,19 @@ void LammpsGui::runDone()
                               : "<p>Error running LAMMPS:</p>",
                  QString("<p><pre>%1</pre></p>").arg(errmsg));
     }
-    dryRunActive = false;
+    const bool wasDryRun = dryRunActive;
+    dryRunActive         = false;
     textEdit->setCursor(nline);
     textEdit->setFileList();
     progress->hide();
     cpuuse->hide();
     dirstatus->show();
+
+    // announce the outcome last, once the window is back in its resting state:
+    // a listener may open or move something, and it should not race the cleanup
+    // above.  A dry run is not a run as far as anyone waiting for results is
+    // concerned, so it is not announced.
+    if (!wasDryRun) emit runFinished(success);
 }
 
 void LammpsGui::restartLammps()

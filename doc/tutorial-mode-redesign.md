@@ -132,7 +132,7 @@ tutorial. A concept learned in Tutorial 1 is not re-explained in Tutorial 2. Tha
 point of a reminder budget, but it means a user returning after six months gets no
 refresher, so the count must be resettable from Preferences.
 
-### D6. Running needs exactly one new signal  *(still true; consumer revised by D8)*
+### D6. Running needs exactly one new signal  *(implemented; consumer revised by D8)*
 
 `LammpsGui::runBuffer()` is already a **public slot**, so a panel can start a run. But
 completion is unobservable: `runDone()` is `protected` and is not a signal
@@ -149,7 +149,11 @@ existing precedent for the alternative, but a signal is cleaner and smaller.)
 The consumer changed with the coach-mark model: rather than an `EXPERIMENT` step
 rewriting bound tokens and running, the tour points at the Run button, waits for the user
 to press it, and on `runFinished` moves the callout to the chart and then the snapshot.
-The signal itself is unchanged, and still unimplemented.
+The signal itself is unchanged.  It is emitted at the end of `runDone()`, after the
+window is back in its resting state so a listener cannot race the cleanup, and a dry run
+is deliberately not announced: nothing waiting on results treats an input check as a run.
+A failed run does not advance the tour either -- the user is left looking at the error,
+which is where the interesting thing just happened.
 
 **Honest limitation:** this cannot be verified end to end on this machine. There is no
 `liblammps` here, so I can build it and test everything up to the run, but not the run.
@@ -271,15 +275,12 @@ in with it.
 
 ## Still open
 
-1. **The run handoff.**  `LammpsGui::runDone()` is protected and is not a signal, so a
-   finished run cannot be observed from outside.  One `runFinished(bool)` signal is still
-   needed before the tour can move from the Run button to the chart to the snapshot.
-2. **Schema v3 and the content.**  Delete the vestigial parameter and prediction types,
+1. **Schema v3 and the content.**  Delete the vestigial parameter and prediction types,
    and rewrite Tutorial 1 to cover both halves of section 3.1 -- the second half
    (cylinder regions, `write_data`, restarting from a data file, groups, `delete_atoms`)
    is not covered at all yet, and works across three input files.
-3. **Figures** -- the article's figures are deliberately not shipped (see D2).  If the
+2. **Figures** -- the article's figures are deliberately not shipped (see D2).  If the
    licensing of the source material is ever settled, using one becomes a content edit
    rather than a code change.
-4. **Content licensing** -- unresolved, and still blocks release.  See
+3. **Content licensing** -- unresolved, and still blocks release.  See
    `tutorial-mode-design.md`.

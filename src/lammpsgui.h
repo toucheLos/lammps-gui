@@ -328,6 +328,21 @@ protected:
      */
     bool eventFilter(QObject *watched, QEvent *event) override;
 
+signals:
+    /**
+     * @brief A simulation run finished
+     * @param success true when LAMMPS reported no error
+     *
+     * Emitted once the main window has returned to its resting state, so a
+     * listener may safely open or move things in response.  Dry runs are not
+     * announced: nothing downstream treats an input check as a run.
+     *
+     * This exists because runDone() is protected and is not a slot, so an
+     * interactive tutorial that hands the user the Run button has no other way
+     * to know when to move on to the results.
+     */
+    void runFinished(bool success);
+
 public slots:
     /** @brief Quit the application */
     void quit();

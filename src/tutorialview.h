@@ -107,6 +107,17 @@ public slots:
     /** @brief The user committed the pending line, so move on */
     void commandCommitted();
 
+    /**
+     * @brief A simulation run finished
+     * @param success true when LAMMPS reported no error
+     *
+     * A step that hands the user the Run button waits here rather than on
+     * Next, so the tour follows the result to the chart on its own.  A failed
+     * run does not advance: the user is left looking at the error, which is
+     * where the interesting thing just happened.
+     */
+    void runFinished(bool success);
+
 private slots:
     void goNext(); ///< advance, withdrawing anything uncommitted
     void goBack(); ///< step back, withdrawing anything uncommitted

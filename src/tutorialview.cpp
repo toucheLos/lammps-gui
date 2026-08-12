@@ -182,6 +182,15 @@ void TutorialView::commandCommitted()
     showCurrentStep();
 }
 
+void TutorialView::runFinished(bool success)
+{
+    const TutorialStep *step = engine->currentStep();
+    if (!step || step->anchor != StepAnchor::Run) return;
+    // a failed run keeps the user where the failure is; only a clean one moves
+    // the tour on to look at the results
+    if (success) engine->next();
+}
+
 void TutorialView::goNext()
 {
     // an offered but unaccepted line is withdrawn rather than left behind
