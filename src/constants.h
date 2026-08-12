@@ -406,7 +406,13 @@ inline const QString PLUGIN_PATH = QStringLiteral("plugin_path_gcc");
 inline const QString PLUGIN_PATH_LEGACY = QStringLiteral("plugin_path");
 // interactive tutorial progress: the step *id* rather than an index, so that
 // reordering or inserting content cannot resume a user at the wrong place
-inline const QString PROGRESS_STEP   = QStringLiteral("progress_step");
+inline const QString PROGRESS_STEP = QStringLiteral("progress_step");
+/// Command words whose explanation an interactive tutorial has already shown.
+/// Per tutorial rather than per user, unlike the concept budget: the same
+/// command met again in a different tutorial deserves its explanation.
+inline const QString COMMANDS_SEEN = QStringLiteral("commands_seen");
+/// Whether the tutorial wizard should start the interactive tour
+inline const QString INTERACTIVE     = QStringLiteral("interactive");
 inline const QString EXPERTMODE      = QStringLiteral("expertmode");
 inline const QString RAWBRUSH        = QStringLiteral("rawbrush");
 inline const QString RAWMODE         = QStringLiteral("rawmode");

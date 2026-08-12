@@ -314,8 +314,16 @@ protected:
      * @param getsolution Whether to include solution files
      * @param openwebpage Whether to open the tutorial web page
      */
+    /**
+     * @brief Bundled interactive content for a tutorial, if any ships
+     * @param collection index into tutorialCollections()
+     * @param tutno 1-based tutorial number
+     * @return Qt resource path, or an empty string when none exists
+     */
+    static QString interactiveContentFor(int collection, int tutno);
+
     void setupTutorial(int collection, int tutno, const QString &dir, bool purgedir,
-                       bool getsolution, bool openwebpage);
+                       bool getsolution, bool openwebpage, bool interactive = false);
 
     /** @brief Clean up the inspect file dialog list */
     void purgeInspectList();

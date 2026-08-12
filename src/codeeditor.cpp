@@ -242,6 +242,35 @@ void CodeEditor::setPendingLine(const QString &text, const QString &section)
     viewport()->update();
 }
 
+bool CodeEditor::removeTutorialLine(const QString &text)
+{
+    const QString want = text.trimmed();
+    if (want.isEmpty()) return false;
+
+    // backwards: the tutorial writes in order, so the most recent match is the
+    // one it wrote, even when the same command appears more than once
+    for (QTextBlock b = document()->lastBlock(); b.isValid(); b = b.previous()) {
+        if (b.text().trimmed() != want) continue;
+
+        // take the block's own text and then the separator that follows it.
+        // QTextCursor::BlockUnderCursor takes the *preceding* separator, which
+        // eats the end of the line above when removing several in a row.
+        QTextCursor cursor(b);
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        cursor.removeSelectedText();
+        if (!cursor.atEnd())
+            cursor.deleteChar(); // the newline after it
+        else
+            cursor.deletePreviousChar(); // last line: take the one before it
+
+        pendingLine = -1; // any pending index is stale once blocks move
+        viewport()->update();
+        return true;
+    }
+    return false;
+}
+
 QRect CodeEditor::pendingLineArea() const
 {
     const int target       = pendingLine >= 0 ? pendingLine : textCursor().blockNumber();

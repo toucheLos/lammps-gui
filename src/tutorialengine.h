@@ -84,6 +84,36 @@ public:
     bool allCommandsInserted() const;
 
     /**
+     * @brief Whether this is the first time a command has appeared
+     * @param command the command word, e.g. "region"
+     * @return true until the command has been shown once
+     *
+     * Commands get a budget of one rather than the concept budget: a command
+     * is explained thoroughly when it first appears and not again, because by
+     * the sixth `region` the explanation is noise.
+     */
+    bool firstUseOf(const QString &command) const;
+
+    /** @brief Record that a command's explanation has now been shown */
+    void noteCommandShown(const QString &command);
+
+    /**
+     * @brief The lines the tour has written for a step
+     * @param stepId step to ask about
+     */
+    QStringList writtenFor(const QString &stepId) const { return written.value(stepId); }
+
+    /** @brief Forget what was written for a step, after removing it from the editor */
+    void forgetWritten(const QString &stepId) { written.remove(stepId); }
+
+    /**
+     * @brief Whether the saved progress points past the very first step
+     *
+     * Used to decide whether resuming is worth offering at all.
+     */
+    bool hasSavedProgress() const;
+
+    /**
      * @brief Whether a concept's explanation should still be shown in full
      * @param id concept id referenced by an annotation
      * @return true while the user has met it fewer than the budget times
@@ -146,6 +176,10 @@ private:
     int inserted = 0;              ///< command lines of this step already inserted
     QHash<QString, int> exposures; ///< per-concept exposure counts
     QSet<QString> countedThisStep; ///< concepts already counted for the current step
+    QSet<QString> commandsSeen;    ///< command words already explained
+    /// what the tour has written into the editor, keyed by step id, so that
+    /// stepping back can take it out again
+    QHash<QString, QStringList> written;
 };
 
 #endif // TUTORIALENGINE_H

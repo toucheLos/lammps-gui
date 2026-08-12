@@ -129,6 +129,17 @@ public:
     /** @brief Withdraw the pending line, removing it from the buffer */
     void clearPendingLine();
 
+    /**
+     * @brief Take a line an interactive tutorial wrote back out again
+     * @param text the line as the tutorial wrote it
+     * @return true if a matching line was found and removed
+     *
+     * Searches backwards for a block whose text still matches and removes it.
+     * A line the user has since edited will not match, and is deliberately left
+     * alone: once they have changed it, it is theirs.
+     */
+    bool removeTutorialLine(const QString &text);
+
     /** @brief True while a line is offered but not yet accepted */
     bool hasPendingLine() const { return pendingLine >= 0; }
 

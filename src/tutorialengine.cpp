@@ -56,6 +56,30 @@ bool TutorialEngine::shouldExplain(const QString &id) const
     return exposures.value(id, 0) < Cfg::CONCEPT_REMINDER_BUDGET;
 }
 
+bool TutorialEngine::firstUseOf(const QString &command) const
+{
+    return !command.isEmpty() && !commandsSeen.contains(command);
+}
+
+void TutorialEngine::noteCommandShown(const QString &command)
+{
+    if (!command.isEmpty()) commandsSeen.insert(command);
+}
+
+bool TutorialEngine::hasSavedProgress() const
+{
+    if (tutorial.id().isEmpty()) return false;
+    QSettings settings;
+    settings.beginGroup(Keys::GROUP_TUTORIAL);
+    settings.beginGroup(tutorial.id());
+    const QString id = settings.value(Keys::PROGRESS_STEP).toString();
+    settings.endGroup();
+    settings.endGroup();
+    // the first step is not progress worth offering to resume
+    const TutorialStep *first = tutorial.step(0, 0);
+    return !id.isEmpty() && tutorial.stepById(id) && (!first || id != first->id);
+}
+
 void TutorialEngine::noteConceptsShown(const QStringList &ids)
 {
     for (const auto &id : ids) {
@@ -130,6 +154,8 @@ QString TutorialEngine::takeNextCommand()
     if (!cmd) return {};
     const QString text = cmd->text;
     ++inserted;
+    // remember what we put in the script, so stepping back can take it out
+    if (const TutorialStep *s = currentStep()) written[s->id].append(text);
     emit commandInserted(text);
     return text;
 }
@@ -157,6 +183,12 @@ void TutorialEngine::saveProgress() const
         settings.setValue(it.key(), it.value());
     settings.endGroup();
 
+    // which commands have been explained is per tutorial, not per user: the
+    // same command met again in a different tutorial deserves its explanation
+    settings.beginGroup(tutorial.id());
+    settings.setValue(Keys::COMMANDS_SEEN, QStringList(commandsSeen.begin(), commandsSeen.end()));
+    settings.endGroup();
+
     settings.endGroup();
 }
 
@@ -174,7 +206,9 @@ void TutorialEngine::restoreProgress()
     QString id;
     if (!tutorial.id().isEmpty()) {
         settings.beginGroup(tutorial.id());
-        id = settings.value(Keys::PROGRESS_STEP).toString();
+        id                     = settings.value(Keys::PROGRESS_STEP).toString();
+        const QStringList seen = settings.value(Keys::COMMANDS_SEEN).toStringList();
+        commandsSeen           = QSet<QString>(seen.begin(), seen.end());
         settings.endGroup();
     }
     settings.endGroup();
@@ -194,6 +228,8 @@ void TutorialEngine::resetProgress()
     settings.endGroup();
 
     exposures.clear();
+    commandsSeen.clear();
+    written.clear();
     act  = 0;
     step = 0;
     resetStepState();

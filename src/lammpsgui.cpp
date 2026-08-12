@@ -515,6 +515,15 @@ void LammpsGui::createTutorialMenu()
     });
 }
 
+QString LammpsGui::interactiveContentFor(int collection, int tutno)
+{
+    // one entry today; adding a tutorial is a content file plus a line here
+    const auto &coll = tutorialCollection(collection);
+    if (coll.key == QStringLiteral("softmatter") && tutno == 1)
+        return QStringLiteral(":/tutorials/lj-fluid.json");
+    return {};
+}
+
 void LammpsGui::startInteractiveTutorial(const QString &path)
 {
     QList<ContentIssue> issues;
@@ -530,7 +539,31 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     delete tutorialview;
     delete tutorialengine;
     tutorialengine = new TutorialEngine(content, this);
-    tutorialengine->restoreProgress();
+
+    // the tutorial writes a script; a buffer holding only the citation banner
+    // that newDocument() leaves behind is not the user's work, and clearing it
+    // is what lets the skeleton be seeded.  Anything else is left alone.
+    if (!textEdit->document()->isModified() &&
+        textEdit->toPlainText().trimmed() == citeme.trimmed())
+        textEdit->document()->clear();
+
+    // report 3: resuming silently dropped the user into the middle of a
+    // tutorial they may not remember.  Offer the choice instead.
+    if (tutorialengine->hasSavedProgress()) {
+        QMessageBox box(this);
+        box.setWindowTitle("LAMMPS-GUI: Interactive Tutorial");
+        box.setText("<p>You have started this tutorial before.</p>");
+        box.setInformativeText("Continue from where you left off, or start again from the "
+                               "beginning?");
+        auto *resume = box.addButton("&Resume", QMessageBox::AcceptRole);
+        box.addButton("Start &Over", QMessageBox::DestructiveRole);
+        box.setDefaultButton(resume);
+        box.exec();
+        if (box.clickedButton() == resume)
+            tutorialengine->restoreProgress();
+        else
+            tutorialengine->resetProgress();
+    }
 
     tutorialview = new TutorialView(tutorialengine, this);
 
@@ -572,6 +605,7 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     connect(tutorialview, &TutorialView::seedSkeleton, textEdit, &CodeEditor::seedSkeleton);
     connect(tutorialview, &TutorialView::offerCommand, textEdit, &CodeEditor::setPendingLine);
     connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
+    connect(tutorialview, &TutorialView::retractCommand, textEdit, &CodeEditor::removeTutorialLine);
     connect(tutorialview, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);
     connect(tutorialview, &TutorialView::openFileRequested, this, &LammpsGui::openTutorialFile);
     connect(textEdit, &CodeEditor::pendingLineCommitted, tutorialview,
@@ -3148,6 +3182,17 @@ QWizardPage *LammpsGui::tutorialDirectory(int collection, int ntutorial)
     solval->setObjectName("t_getsolution");
     layout->addWidget(solval, 0, Qt::AlignVCenter | Qt::AlignLeft);
 
+    // only offer the interactive tour where a content file actually ships for
+    // this tutorial; everywhere else the checkbox would be a dead control
+    if (!interactiveContentFor(collection, ntutorial).isEmpty()) {
+        auto *interval = new QCheckBox("&Guide me through it step by step");
+        interval->setChecked(settings.value(Keys::INTERACTIVE, true).toBool());
+        interval->setObjectName("t_interactive");
+        interval->setToolTip("Walk through the tutorial inside the editor, one command at a "
+                             "time, with each one explained as it is written.");
+        layout->addWidget(interval, 0, Qt::AlignVCenter | Qt::AlignLeft);
+    }
+
     // only offer the webpage checkbox for collections that have online pages
     QCheckBox *webval = nullptr;
     if (!coll.webUrl.isEmpty()) {
@@ -3598,7 +3643,7 @@ bool LammpsGui::downloadTutorialFiles(const QString &dir, const QList<DownloadIt
 }
 
 void LammpsGui::setupTutorial(int collection, int tutno, const QString &dir, bool purgedir,
-                              bool getsolution, bool openwebpage)
+                              bool getsolution, bool openwebpage, bool interactive)
 {
     const auto &coll = tutorialCollection(collection);
     if (coll.filesUrl.isEmpty()) {
@@ -3679,6 +3724,13 @@ void LammpsGui::setupTutorial(int collection, int tutno, const QString &dir, boo
     // the initial template may itself be among the files that failed to download
     const QString firstFile = dir + QDir::separator() + first;
     if (!first.isEmpty() && QFileInfo::exists(firstFile)) openFile(firstFile);
+
+    // the tour drives the files that were just downloaded, so it starts only
+    // after they are on disk and the first one is open
+    if (interactive) {
+        const QString content = interactiveContentFor(collection, tutno);
+        if (!content.isEmpty()) startInteractiveTutorial(content);
+    }
 }
 
 // Local Variables:

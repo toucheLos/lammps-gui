@@ -160,16 +160,61 @@ void TutorialView::showCurrentStep()
     if (!step->openFile.isEmpty()) emit openFileRequested(step->openFile);
 
     const auto &act = engine->content().acts().at(engine->actIndex());
-    coach->setContent(QStringLiteral("%1 -- %2").arg(engine->content().title(), act.title),
-                      step->title, renderText(step->teach));
     coach->setProgress(engine->stepsCompleted() + 1, engine->content().stepCount());
     coach->setBackEnabled(engine->stepsCompleted() > 0);
     coach->setNextText(QStringLiteral("&Next >"));
     coach->setNextEnabled(true);
+    coach->setFeedback(QString(), true);
+
+    QString body = renderText(step->teach);
 
     // a step with commands hands them to the editor one at a time; the callout
-    // itself never shows code, it only says what to do with it
-    if (const CommandLine *cmd = engine->nextCommand()) {
+    // never shows the code itself, only what it means
+    const CommandLine *cmd = engine->nextCommand();
+    if (cmd) {
+        // the command word gets a budget of one.  By the sixth "region" the
+        // explanation is noise, so a repeat shows the per-argument notes alone
+        // and skips the prose.
+        const QString word  = cmd->text.section(QLatin1Char(' '), 0, 0);
+        const bool firstUse = engine->firstUseOf(word);
+        QStringList shownConcepts;
+
+        if (firstUse && !cmd->explain.isEmpty())
+            body += QStringLiteral("<p><b><code>%1</code></b> &mdash; %2</p>")
+                        .arg(word.toHtmlEscaped(), renderText(cmd->explain));
+        else if (!cmd->explain.isEmpty())
+            body +=
+                QStringLiteral("<p><b><code>%1</code></b> again.</p>").arg(word.toHtmlEscaped());
+
+        const QStringList words = canonicalWords(cmd->text);
+        for (const auto &note : cmd->notes) {
+            const QString token = note.argIndex < words.size() ? words.at(note.argIndex)
+                                                               : QString::number(note.argIndex);
+            body += QStringLiteral("<p><code>%1</code> &mdash; %2")
+                        .arg(token.toHtmlEscaped(), note.note.toHtmlEscaped());
+
+            // the alternatives and the concept reminder are the expensive part;
+            // they fade with the concept budget, and a note with no concept has
+            // no budget to spend so it always shows
+            const bool explain = note.conceptId.isEmpty() || engine->shouldExplain(note.conceptId);
+            if (explain && !note.alternatives.isEmpty())
+                body += QStringLiteral("<br><i>%1</i>").arg(note.alternatives.toHtmlEscaped());
+            if (explain && !note.conceptId.isEmpty())
+                if (const auto *c = engine->content().conceptFor(note.conceptId))
+                    body += QStringLiteral("<br><small>%1: %2</small>")
+                                .arg(c->term.toHtmlEscaped(), c->explain.toHtmlEscaped());
+            if (!note.conceptId.isEmpty()) shownConcepts << note.conceptId;
+            body += QStringLiteral("</p>");
+        }
+        if (!cmd->conceptId.isEmpty()) shownConcepts << cmd->conceptId;
+        engine->noteConceptsShown(shownConcepts);
+        engine->noteCommandShown(word);
+    }
+
+    coach->setContent(QStringLiteral("%1 -- %2").arg(engine->content().title(), act.title),
+                      step->title, body);
+
+    if (cmd) {
         if (cmd->typed) {
             // reinforcement: the line is described but never written, so the
             // user has to produce it themselves.  An empty pending line marks
@@ -184,7 +229,6 @@ void TutorialView::showCurrentStep()
     } else {
         coach->setCallToAction(step->callToAction);
     }
-    coach->setFeedback(QString(), true);
 
     reposition();
 }
@@ -261,7 +305,30 @@ void TutorialView::goNext()
 void TutorialView::goBack()
 {
     emit withdrawCommand();
+
+    // rewind the script as well as the cursor.  Stepping back used to leave
+    // every accepted line in place, so going forward again wrote them twice.
+    if (const TutorialStep *leaving = engine->currentStep()) rewind(leaving->id);
+
+    // move without letting the step change repaint yet: showCurrentStep() would
+    // offer the landing step's first command straight back into the buffer, and
+    // the rewind below would then be working against a line that is in flight
+    const bool blocked = engine->blockSignals(true);
     engine->previous();
+    engine->blockSignals(blocked);
+
+    // the step we land on replays from its first command, so its lines come out
+    if (const TutorialStep *landing = engine->currentStep()) rewind(landing->id);
+    showCurrentStep();
+}
+
+void TutorialView::rewind(const QString &stepId)
+{
+    const QStringList lines = engine->writtenFor(stepId);
+    // last written, first removed: undoing in reverse keeps the matches honest
+    for (int i = lines.size() - 1; i >= 0; --i)
+        emit retractCommand(lines.at(i));
+    engine->forgetWritten(stepId);
 }
 
 // Local Variables:

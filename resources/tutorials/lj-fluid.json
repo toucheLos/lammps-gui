@@ -215,8 +215,7 @@
             },
             {
               "text": "create_atoms 2 random 100 12756 simbox overlap 0.3",
-              "explain": "Add 100 atoms of the heavier second type, with a different seed so they land elsewhere.",
-              "typed": true
+              "explain": "Add 100 atoms of the heavier second type, with a different seed so they land elsewhere."
             }
           ]
         }
@@ -241,8 +240,7 @@
             },
             {
               "text": "mass 2 5.0",
-              "explain": "Type 2 is five times heavier, so at the same temperature it moves more sluggishly.",
-              "typed": true
+              "explain": "Type 2 is five times heavier, so at the same temperature it moves more sluggishly."
             },
             {
               "text": "pair_style lj/cut 4.0",
@@ -289,8 +287,7 @@
                   "alternatives": "You never write a 1-2 line. LAMMPS mixes it: eps_12 = sqrt(1.0 x 0.5) = 0.707, sigma_12 = sqrt(1.0 x 3.0) = 1.732. `pair_modify` chooses another rule.",
                   "concept": "pair-mixing"
                 }
-              ],
-              "typed": true
+              ]
             }
           ]
         }
@@ -557,8 +554,7 @@
             },
             {
               "text": "region cyl_out cylinder z 0 0 10 INF INF side out",
-              "explain": "Everything outside the same cylinder.",
-              "typed": true
+              "explain": "Everything outside the same cylinder."
             },
             {
               "text": "create_atoms 1 random 1000 34134 cyl_out",
@@ -653,8 +649,7 @@
             },
             {
               "text": "region cyl_out cylinder z 0 0 10 INF INF side out",
-              "explain": "And the complement.",
-              "typed": true
+              "explain": "And the complement."
             },
             {
               "text": "group grp_t1 type 1",
@@ -671,8 +666,7 @@
             },
             {
               "text": "group grp_t2 type 2",
-              "explain": "Every atom of type 2.",
-              "typed": true
+              "explain": "Every atom of type 2."
             },
             {
               "text": "group grp_in region cyl_in",

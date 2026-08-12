@@ -36,12 +36,15 @@ void TutorialWizard::accept()
     auto *dirpurge   = findChild<QCheckBox *>("t_dirpurge");
     auto *getsol     = findChild<QCheckBox *>("t_getsolution");
     auto *webopen    = findChild<QCheckBox *>("t_webopen");
+    auto *interact   = findChild<QCheckBox *>("t_interactive");
     bool purgedir    = false;
     bool getsolution = false;
     bool openwebpage = false;
+    bool interactive = false;
     QString curdir;
 
     if (webopen) openwebpage = webopen->isChecked();
+    if (interact) interactive = interact->isChecked();
 
     // create and populate directory.
     if (dirname) {
@@ -66,7 +69,7 @@ void TutorialWizard::accept()
     if (dirname) {
         if (lammpsgui)
             lammpsgui->setupTutorial(collection, ntutorial, curdir, purgedir, getsolution,
-                                     openwebpage);
+                                     openwebpage, interactive);
     }
 }
 

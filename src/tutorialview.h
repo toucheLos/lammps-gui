@@ -87,6 +87,12 @@ signals:
     void withdrawCommand();
 
     /**
+     * @brief Take a line the tour wrote back out of the script
+     * @param text the line as it was written
+     */
+    void retractCommand(const QString &text);
+
+    /**
      * @brief Put a command straight into the script, already committed
      * @param text the command to insert
      *
@@ -141,6 +147,8 @@ private:
     static QString renderText(const QString &text);
     /// the anchor the current step asks for
     StepAnchor currentAnchor() const;
+    /// take every line the tour wrote for a step back out of the script
+    void rewind(const QString &stepId);
 
     TutorialEngine *engine = nullptr;         ///< drives the tutorial (not owned)
     QWidget *host          = nullptr;         ///< main window (not owned)
