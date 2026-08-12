@@ -83,6 +83,16 @@ signals:
      */
     void offerCommand(const QString &text, const QString &section);
 
+    /**
+     * @brief Offer a whole group of commands at once
+     * @param texts the commands, in order; empty offers one blank line
+     * @param section heading to file them under
+     *
+     * Commands serving one purpose are shown, highlighted and accepted
+     * together, so nothing reaches the script without being visible first.
+     */
+    void offerCommands(const QStringList &texts, const QString &section);
+
     /** @brief Withdraw a pending command that was never committed */
     void withdrawCommand();
 
@@ -150,6 +160,31 @@ private:
     /// take every line the tour wrote for a step back out of the script
     void rewind(const QString &stepId);
 
+    /**
+     * @brief RAII flag marking a write the tour made itself
+     *
+     * Insertion runs through the same pending-line machinery the user drives
+     * with Tab, so the editor cannot tell the two apart and reports both as
+     * CodeEditor::pendingLineCommitted.  The flag lets commandCommitted()
+     * ignore the echo of its own writes; without it each inserted line looked
+     * like the user accepting the following group, which was then written
+     * without ever having been offered.
+     */
+    class InsertGuard {
+    public:
+        explicit InsertGuard(bool &flag) : ref(flag) { ref = true; }
+        ~InsertGuard() { ref = false; }
+        InsertGuard()                               = delete;
+        InsertGuard(const InsertGuard &)            = delete;
+        InsertGuard(InsertGuard &&)                 = delete;
+        InsertGuard &operator=(const InsertGuard &) = delete;
+        InsertGuard &operator=(InsertGuard &&)      = delete;
+
+    private:
+        bool &ref; ///< the flag being held true
+    };
+
+    bool inserting         = false;           ///< true while the tour writes its own lines
     TutorialEngine *engine = nullptr;         ///< drives the tutorial (not owned)
     QWidget *host          = nullptr;         ///< main window (not owned)
     QPointer<TutorialSpotlight> spotlight;    ///< highlight layer, child of host

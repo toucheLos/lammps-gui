@@ -42,6 +42,33 @@ const CommandLine *TutorialEngine::nextCommand() const
     return &s->commands.at(inserted);
 }
 
+QList<CommandLine> TutorialEngine::nextGroup() const
+{
+    QList<CommandLine> group;
+    const TutorialStep *s = currentStep();
+    if (!s) return group;
+    for (int i = inserted; i < s->commands.size(); ++i) {
+        // the first is always taken; the rest only while they ask to travel
+        // with it
+        if (i > inserted && !s->commands.at(i).together) break;
+        group.append(s->commands.at(i));
+    }
+    return group;
+}
+
+QStringList TutorialEngine::takeNextGroup()
+{
+    const QList<CommandLine> group = nextGroup();
+    QStringList texts;
+    for (const auto &cmd : group) {
+        texts << cmd.text;
+        ++inserted;
+        if (const TutorialStep *s = currentStep()) written[s->id].append(cmd.text);
+        emit commandInserted(cmd.text);
+    }
+    return texts;
+}
+
 bool TutorialEngine::allCommandsInserted() const
 {
     const TutorialStep *s = currentStep();

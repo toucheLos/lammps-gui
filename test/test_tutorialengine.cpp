@@ -308,6 +308,72 @@ TEST(TutorialEngineTest, ASavedStepThatNoLongerExistsStartsOver)
     EXPECT_EQ(engine.currentStep()->id, QStringLiteral("s1"));
 }
 
+
+// A group is the unit the tour advances by: commands marked "together" travel
+// with the one before them and are written in a single beat.
+TEST(TutorialEngineTest, TogetherCommandsAreOfferedAndTakenAsOneGroup)
+{
+    const QByteArray doc = R"({
+      "schema_version": 3, "id": "grp", "title": "Grouped",
+      "attribution": { "license": "test" },
+      "acts": [
+        { "id": "a1", "title": "First", "steps": [
+          { "id": "s1", "kind": "SHOW", "title": "Pairs", "teach": "t",
+            "commands": [
+              { "text": "mass 1 1.0", "explain": "light" },
+              { "text": "mass 2 5.0", "explain": "heavy", "together": true },
+              { "text": "pair_style lj/cut 4.0", "explain": "the model" }
+            ] }
+        ] }
+      ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(doc, &issues);
+    ASSERT_EQ(countContentErrors(issues), 0);
+
+    TutorialEngine engine(content);
+    // the first group is the two mass lines, not the pair_style that follows
+    ASSERT_EQ(engine.nextGroup().size(), 2);
+    EXPECT_EQ(engine.nextGroup().at(0).text, QStringLiteral("mass 1 1.0"));
+    EXPECT_EQ(engine.nextGroup().at(1).text, QStringLiteral("mass 2 5.0"));
+
+    const QStringList taken = engine.takeNextGroup();
+    ASSERT_EQ(taken.size(), 2);
+    EXPECT_EQ(engine.insertedCount(), 2);
+    EXPECT_FALSE(engine.allCommandsInserted());
+
+    // and the next beat is the single ungrouped command
+    ASSERT_EQ(engine.nextGroup().size(), 1);
+    EXPECT_EQ(engine.nextGroup().at(0).text, QStringLiteral("pair_style lj/cut 4.0"));
+    engine.takeNextGroup();
+    EXPECT_TRUE(engine.allCommandsInserted());
+    EXPECT_TRUE(engine.nextGroup().isEmpty());
+}
+
+// Both lines of a group are recorded, so stepping back takes both out again.
+TEST(TutorialEngineTest, AGroupIsRecordedLineByLineForRewinding)
+{
+    const QByteArray doc = R"({
+      "schema_version": 3, "id": "grp2", "title": "Grouped",
+      "attribution": { "license": "test" },
+      "acts": [
+        { "id": "a1", "title": "First", "steps": [
+          { "id": "s1", "kind": "SHOW", "title": "Pairs", "teach": "t",
+            "commands": [
+              { "text": "region cyl_in cylinder z 0 0 10 INF INF side in", "explain": "in" },
+              { "text": "region cyl_out cylinder z 0 0 10 INF INF side out",
+                "explain": "out", "together": true }
+            ] }
+        ] }
+      ]
+    })";
+    TutorialEngine engine(parseTutorialJson(doc));
+    engine.takeNextGroup();
+    EXPECT_EQ(engine.writtenFor(QStringLiteral("s1")).size(), 2);
+    engine.forgetWritten(QStringLiteral("s1"));
+    EXPECT_TRUE(engine.writtenFor(QStringLiteral("s1")).isEmpty());
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

@@ -197,6 +197,7 @@ void CodeEditor::seedSkeleton(const QStringList &lines)
 void CodeEditor::setPendingLine(const QString &text, const QString &section)
 {
     clearPendingLine();
+    pendingCount = 1;
     // an empty text is not a mistake: it offers a *blank* pending line for the
     // user to type into, which is how a tutorial asks for a command rather than
     // handing it over
@@ -284,12 +285,50 @@ QRect CodeEditor::pendingLineArea() const
     return area.intersected(viewport()->rect());
 }
 
+void CodeEditor::setPendingLines(const QStringList &lines, const QString &section)
+{
+    if (lines.isEmpty()) {
+        setPendingLine(QString(), section);
+        return;
+    }
+    // place the first line the usual way, then append the rest below it: the
+    // whole group ends up contiguous and highlighted together
+    setPendingLine(lines.first(), section);
+    if (pendingLine < 0) return;
+
+    QTextBlock block = document()->findBlockByNumber(pendingLine);
+    QTextCursor cursor(block);
+    cursor.movePosition(QTextCursor::EndOfBlock);
+    for (int i = 1; i < lines.size(); ++i)
+        cursor.insertText(QStringLiteral("\n") + lines.at(i));
+    pendingCount = static_cast<int>(lines.size());
+    setTextCursor(cursor);
+    ensureCursorVisible();
+    viewport()->update();
+}
+
+QStringList CodeEditor::commitPendingLines()
+{
+    QStringList out;
+    if (pendingLine < 0) return out;
+    for (int i = 0; i < qMax(pendingCount, 1); ++i) {
+        const QTextBlock b = document()->findBlockByNumber(pendingLine + i);
+        if (b.isValid()) out << b.text();
+    }
+    pendingLine  = -1;
+    pendingCount = 0;
+    viewport()->update();
+    emit pendingLineCommitted(out.join(QLatin1Char('\n')));
+    return out;
+}
+
 QString CodeEditor::commitPendingLine()
 {
     if (pendingLine < 0) return {};
     const QTextBlock block = document()->findBlockByNumber(pendingLine);
     const QString text     = block.isValid() ? block.text() : QString();
     pendingLine            = -1;
+    pendingCount           = 0;
     viewport()->update();
     emit pendingLineCommitted(text);
     return text;
@@ -298,8 +337,17 @@ QString CodeEditor::commitPendingLine()
 void CodeEditor::clearPendingLine()
 {
     if (pendingLine < 0) return;
+    // take the group out from the bottom up, so the block numbers above stay put
+    for (int i = qMax(pendingCount, 1) - 1; i > 0; --i) {
+        const QTextBlock extra = document()->findBlockByNumber(pendingLine + i);
+        if (!extra.isValid()) continue;
+        QTextCursor cursor(extra);
+        cursor.select(QTextCursor::BlockUnderCursor);
+        cursor.removeSelectedText();
+    }
     const QTextBlock block = document()->findBlockByNumber(pendingLine);
     pendingLine            = -1;
+    pendingCount           = 0;
     if (block.isValid()) {
         // take the whole line and the newline that introduced it, so
         // withdrawing an offer leaves the buffer exactly as it was
@@ -680,9 +728,10 @@ void CodeEditor::paintEvent(QPaintEvent *event)
     // the pending line is filled *before* the base class paints, so the text
     // and its syntax highlighting draw on top of the marker rather than under it
     if (pendingLine >= 0) {
-        const QTextBlock block = document()->findBlockByNumber(pendingLine);
-        if (block.isValid() && block.isVisible()) {
-            QPainter marker(viewport());
+        QPainter marker(viewport());
+        for (int i = 0; i < qMax(pendingCount, 1); ++i) {
+            const QTextBlock block = document()->findBlockByNumber(pendingLine + i);
+            if (!block.isValid() || !block.isVisible()) continue;
             const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
             marker.fillRect(geom.left(), geom.top(), viewport()->width(), geom.height(),
                             Coach::highlight());

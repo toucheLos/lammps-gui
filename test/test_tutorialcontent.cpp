@@ -443,6 +443,43 @@ TEST(TutorialContentTest, ShippedTutorialOneAnnotatesWhatItShows)
 }
 #endif
 
+// The grouping flag is part of schema 3, so it must not be reported as a key
+// from a newer schema, and a group cannot open a step: "together" means
+// "with the command before this one", and there is no such command.
+TEST(TutorialContentTest, TogetherParsesAndCannotOpenAStep)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "mass 1 1.0", "explain": "light" },
+          { "text": "mass 2 5.0", "explain": "heavy", "together": true } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0);
+    EXPECT_TRUE(issues.isEmpty()) << qPrintable(formatContentIssues(issues));
+    const TutorialStep *step = content.step(0, 0);
+    ASSERT_NE(step, nullptr);
+    ASSERT_EQ(step->commands.size(), 2);
+    EXPECT_FALSE(step->commands.at(0).together);
+    EXPECT_TRUE(step->commands.at(1).together);
+
+    const QByteArray bad = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "mass 1 1.0", "explain": "light", "together": true } ] } ] } ]
+    })";
+    QList<ContentIssue> badIssues;
+    parseTutorialJson(bad, &badIssues);
+    EXPECT_GT(countContentErrors(badIssues), 0);
+    EXPECT_TRUE(formatContentIssues(badIssues).contains(QStringLiteral("first command")))
+        << qPrintable(formatContentIssues(badIssues));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

@@ -604,6 +604,7 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     // file they built themselves rather than a transcript
     connect(tutorialview, &TutorialView::seedSkeleton, textEdit, &CodeEditor::seedSkeleton);
     connect(tutorialview, &TutorialView::offerCommand, textEdit, &CodeEditor::setPendingLine);
+    connect(tutorialview, &TutorialView::offerCommands, textEdit, &CodeEditor::setPendingLines);
     connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
     connect(tutorialview, &TutorialView::retractCommand, textEdit, &CodeEditor::removeTutorialLine);
     connect(tutorialview, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);

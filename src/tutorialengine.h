@@ -80,6 +80,23 @@ public:
     int insertedCount() const { return inserted; }
     /** @brief The command line the panel should offer next, or nullptr */
     const CommandLine *nextCommand() const;
+
+    /**
+     * @brief The commands to present together as one beat
+     * @return the next command and every command marked "together" that
+     *         follows it; empty once the step's commands are all inserted
+     *
+     * The tour advances by group rather than by single command, so that
+     * commands serving one purpose are highlighted and pasted at once and
+     * nothing is ever inserted without having been shown first.
+     */
+    QList<CommandLine> nextGroup() const;
+
+    /**
+     * @brief Consume the group, recording it as written
+     * @return the command texts, in order
+     */
+    QStringList takeNextGroup();
     /** @brief True when every command of the current step has been inserted */
     bool allCommandsInserted() const;
 

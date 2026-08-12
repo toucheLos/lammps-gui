@@ -110,6 +110,11 @@ struct CommandLine {
     /// for reinforcement: the line is not written into the editor, the callout
     /// describes it instead, and what the user types is compared word by word.
     bool typed = false;
+    /// present this command together with the one before it, sharing its
+    /// explanation.  Commands that serve one purpose belong in one group -- the
+    /// two create_atoms lines, a region and its complement -- and in a later
+    /// tutorial a whole block of familiar commands can travel as one.
+    bool together = false;
 };
 
 /**

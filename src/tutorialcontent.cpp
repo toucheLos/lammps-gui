@@ -109,7 +109,7 @@ const QSet<QString> STEP_KEYS = {
 };
 const QSet<QString> COMMAND_KEYS = {
     QStringLiteral("text"),    QStringLiteral("explain"), QStringLiteral("notes"),
-    QStringLiteral("concept"), QStringLiteral("typed"),
+    QStringLiteral("concept"), QStringLiteral("typed"),  QStringLiteral("together"),
 };
 const QSet<QString> NOTE_KEYS = {
     QStringLiteral("arg"),
@@ -300,6 +300,7 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("text"), path, ctx, cmd.text, true);
     readString(obj, QStringLiteral("explain"), path, ctx, cmd.explain);
     readBool(obj, QStringLiteral("typed"), path, ctx, cmd.typed);
+    readBool(obj, QStringLiteral("together"), path, ctx, cmd.together);
     if (readString(obj, QStringLiteral("concept"), path, ctx, cmd.conceptId))
         usedConcepts.insert(cmd.conceptId);
 
@@ -390,6 +391,10 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     // ---- cross-checks the schema alone cannot express ----
     switch (step.kind) {
         case StepKind::Show:
+            if (!step.commands.isEmpty() && step.commands.first().together)
+                ctx.error(sub(path, QStringLiteral("commands")),
+                          QStringLiteral("the first command of a step cannot be \"together\": "
+                                         "there is nothing before it to group with"));
             if (step.commands.isEmpty())
                 ctx.error(sub(path, QStringLiteral("commands")),
                           QStringLiteral("a SHOW step exists to offer commands; use OBSERVE "

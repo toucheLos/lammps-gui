@@ -71,6 +71,12 @@ QString TutorialView::renderText(const QString &text)
                 QStringLiteral("<i>\\1</i>"));
     out.replace(QRegularExpression(QStringLiteral("`([^`]+)`")),
                 QStringLiteral("<code>\\1</code>"));
+    // the tutorial's mathematics: superscripts and subscripts are all it needs,
+    // and QTextBrowser renders them without any new dependency
+    out.replace(QRegularExpression(QStringLiteral("\\^\\{([^}]*)\\}")),
+                QStringLiteral("<sup>\\1</sup>"));
+    out.replace(QRegularExpression(QStringLiteral("_\\{([^}]*)\\}")),
+                QStringLiteral("<sub>\\1</sub>"));
     out.replace(QStringLiteral("\n\n"), QStringLiteral("<p>"));
     out.replace(QStringLiteral("\n"), QStringLiteral("<br>"));
     return out;
@@ -170,43 +176,38 @@ void TutorialView::showCurrentStep()
 
     // a step with commands hands them to the editor one at a time; the callout
     // never shows the code itself, only what it means
-    const CommandLine *cmd = engine->nextCommand();
-    if (cmd) {
+    const QList<CommandLine> group = engine->nextGroup();
+    for (const auto &cmd : group) {
         // the command word gets a budget of one.  By the sixth "region" the
-        // explanation is noise, so a repeat shows the per-argument notes alone
-        // and skips the prose.
-        const QString word  = cmd->text.section(QLatin1Char(' '), 0, 0);
+        // prose is noise, so a repeat shows the per-argument notes alone --
+        // every group still gets its own beat either way.
+        const QString word  = cmd.text.section(QLatin1Char(' '), 0, 0);
         const bool firstUse = engine->firstUseOf(word);
         QStringList shownConcepts;
 
-        if (firstUse && !cmd->explain.isEmpty())
+        if (firstUse && !cmd.explain.isEmpty())
             body += QStringLiteral("<p><b><code>%1</code></b> &mdash; %2</p>")
-                        .arg(word.toHtmlEscaped(), renderText(cmd->explain));
-        else if (!cmd->explain.isEmpty())
-            body +=
-                QStringLiteral("<p><b><code>%1</code></b> again.</p>").arg(word.toHtmlEscaped());
+                        .arg(word.toHtmlEscaped(), renderText(cmd.explain));
 
-        const QStringList words = canonicalWords(cmd->text);
-        for (const auto &note : cmd->notes) {
+        const QStringList words = canonicalWords(cmd.text);
+        for (const auto &note : cmd.notes) {
             const QString token = note.argIndex < words.size() ? words.at(note.argIndex)
-                                                               : QString::number(note.argIndex);
+                                                              : QString::number(note.argIndex);
             body += QStringLiteral("<p><code>%1</code> &mdash; %2")
-                        .arg(token.toHtmlEscaped(), note.note.toHtmlEscaped());
+                        .arg(token.toHtmlEscaped(), renderText(note.note));
 
-            // the alternatives and the concept reminder are the expensive part;
-            // they fade with the concept budget, and a note with no concept has
-            // no budget to spend so it always shows
-            const bool explain = note.conceptId.isEmpty() || engine->shouldExplain(note.conceptId);
+            const bool explain =
+                note.conceptId.isEmpty() || engine->shouldExplain(note.conceptId);
             if (explain && !note.alternatives.isEmpty())
-                body += QStringLiteral("<br><i>%1</i>").arg(note.alternatives.toHtmlEscaped());
+                body += QStringLiteral("<br><i>%1</i>").arg(renderText(note.alternatives));
             if (explain && !note.conceptId.isEmpty())
                 if (const auto *c = engine->content().conceptFor(note.conceptId))
                     body += QStringLiteral("<br><small>%1: %2</small>")
-                                .arg(c->term.toHtmlEscaped(), c->explain.toHtmlEscaped());
+                                .arg(c->term.toHtmlEscaped(), renderText(c->explain));
             if (!note.conceptId.isEmpty()) shownConcepts << note.conceptId;
             body += QStringLiteral("</p>");
         }
-        if (!cmd->conceptId.isEmpty()) shownConcepts << cmd->conceptId;
+        if (!cmd.conceptId.isEmpty()) shownConcepts << cmd.conceptId;
         engine->noteConceptsShown(shownConcepts);
         engine->noteCommandShown(word);
     }
@@ -214,17 +215,26 @@ void TutorialView::showCurrentStep()
     coach->setContent(QStringLiteral("%1 -- %2").arg(engine->content().title(), act.title),
                       step->title, body);
 
-    if (cmd) {
-        if (cmd->typed) {
-            // reinforcement: the line is described but never written, so the
-            // user has to produce it themselves.  An empty pending line marks
-            // where it goes and gives Tab something to check.
-            emit offerCommand(QString(), step->section);
+    if (!group.isEmpty()) {
+        QStringList texts;
+        bool anyTyped = false;
+        for (const auto &cmd : group) {
+            texts << cmd.text;
+            anyTyped = anyTyped || cmd.typed;
+        }
+        if (anyTyped) {
+            // reinforcement: described but never written, so the user produces
+            // it themselves.  A blank pending line marks where it goes.
+            emit offerCommands(QStringList(), step->section);
             coach->setCallToAction(
                 QStringLiteral("Type it yourself on the highlighted line, then press Tab."));
         } else {
-            emit offerCommand(cmd->text, step->section);
-            coach->setCallToAction(QStringLiteral("Press Tab in the editor to accept this line."));
+            emit offerCommands(texts, step->section);
+            coach->setCallToAction(
+                texts.size() > 1
+                    ? QStringLiteral("Press Tab in the editor to accept these %1 lines.")
+                          .arg(texts.size())
+                    : QStringLiteral("Press Tab in the editor to accept this line."));
         }
     } else {
         coach->setCallToAction(step->callToAction);
@@ -235,6 +245,10 @@ void TutorialView::showCurrentStep()
 
 void TutorialView::commandCommitted(const QString &written)
 {
+    // our own writes echo back through here; only a commit the user made
+    // advances the tour
+    if (inserting) return;
+
     const CommandLine *cmd = engine->nextCommand();
     if (cmd && cmd->typed) {
         // compare word by word after canonicalization, so spacing, letter case
@@ -257,14 +271,14 @@ void TutorialView::commandCommitted(const QString &written)
                     }
             coach->setFeedback(why, false);
             // leave the line pending so they can correct it in place
-            emit offerCommand(QString(), engine->currentStep()->section);
+            emit offerCommands(QStringList(), engine->currentStep()->section);
             return;
         }
         coach->setFeedback(QStringLiteral("That is it."), true);
     }
 
-    engine->takeNextCommand();
-    // accepting the last line of a step finishes it: waiting for a separate
+    engine->takeNextGroup();
+    // accepting the last group of a step finishes it: waiting for a separate
     // Next press there just looks like nothing happened
     if (engine->allCommandsInserted() && !engine->currentStep()->expect.isEmpty()) {
         showCurrentStep();
@@ -291,13 +305,24 @@ void TutorialView::goNext()
     // an offered but unaccepted line is withdrawn rather than left behind
     emit withdrawCommand();
 
-    // the user chose to move on rather than accept each line by hand: the
-    // remaining lines still have to reach the script, or the next run would not
-    // work.  Then advance -- staying on the step is indistinguishable from the
-    // button being broken.
-    while (const CommandLine *cmd = engine->nextCommand()) {
-        emit insertCommand(cmd->text, engine->currentStep()->section);
-        engine->takeNextCommand();
+    // Next accepts exactly the group that is on offer and no more.  It used to
+    // dump every remaining command of the step at once, which is how commands
+    // arrived in the script having never been shown or explained.
+    if (!engine->nextGroup().isEmpty()) {
+        const TutorialStep *step = engine->currentStep();
+        const QStringList texts  = engine->takeNextGroup();
+        // writing a line goes through the editor's pending-line machinery, so
+        // it comes back as pendingLineCommitted -- which is also how the user
+        // accepts a line with Tab.  Without this guard our own insertion is
+        // mistaken for the user accepting the *next* group, and that group is
+        // written having never been offered.
+        const InsertGuard guard(inserting);
+        for (const auto &text : texts)
+            emit insertCommand(text, step ? step->section : QString());
+        if (!engine->allCommandsInserted()) {
+            showCurrentStep();
+            return;
+        }
     }
     engine->next();
 }

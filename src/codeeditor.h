@@ -121,10 +121,25 @@ public:
     void setPendingLine(const QString &text, const QString &section = QString());
 
     /**
+     * @brief Offer several lines at once, as one highlighted group
+     * @param lines the commands, in order; an empty list offers one blank line
+     * @param section heading to file them under
+     *
+     * Commands that serve one purpose are shown and accepted together, so the
+     * whole group is highlighted before any of it is committed and nothing can
+     * arrive in the script without having been visible first.
+     */
+    void setPendingLines(const QStringList &lines, const QString &section = QString());
+
+    /**
      * @brief Accept the pending line, leaving it in the buffer
      * @return the text that was committed, or an empty string if none was pending
      */
     QString commitPendingLine();
+
+    /** @brief Accept every pending line, leaving them in the buffer
+     *  @return the lines as they now stand, in order */
+    QStringList commitPendingLines();
 
     /** @brief Withdraw the pending line, removing it from the buffer */
     void clearPendingLine();
@@ -517,6 +532,8 @@ private:
     /// user has not accepted yet; -1 when nothing is pending.  Tab commits it,
     /// and only while it is set does Tab mean anything other than reformat.
     int pendingLine = -1;
+    /// number of blocks the pending group covers, starting at pendingLine
+    int pendingCount = 0;
     bool reformatOnReturn;    ///< Enable auto-reformatting on Enter
     bool automaticCompletion; ///< Enable auto-completion popup
     QString docver;           ///< LAMMPS documentation version string
