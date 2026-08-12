@@ -21,11 +21,11 @@
 
 namespace {
 
-/// a three-step tutorial: two shows (one with two commands) and an experiment
+/// a three-step tutorial: two shows (one with two commands) and an observe
 QByteArray stubDocument()
 {
     return QByteArray(R"({
-      "schema_version": 2, "id": "stub", "title": "Stub",
+      "schema_version": 3, "id": "stub", "title": "Stub",
       "attribution": { "license": "test" },
       "concepts": [
         { "id": "units", "term": "reduced units", "explain": "dimensionless" },
@@ -45,10 +45,9 @@ QByteArray stubDocument()
             ] }
         ] },
         { "id": "a2", "title": "Second", "steps": [
-          { "id": "s3", "kind": "EXPERIMENT", "title": "Push it", "teach": "t",
-            "checkpoint": true,
-            "params": [ { "id": "dt", "label": "timestep", "command": "timestep", "arg": 1,
-                          "min": 0.001, "max": 0.06, "step": 0.005, "initial": 0.005 } ],
+          { "id": "s3", "kind": "OBSERVE", "title": "Run it", "teach": "t",
+            "checkpoint": true, "anchor": "run",
+            "call_to_action": "Press the Run button.",
             "expect": "the energy trace" }
         ] }
       ]

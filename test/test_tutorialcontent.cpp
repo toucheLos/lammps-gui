@@ -26,7 +26,7 @@ namespace {
 QByteArray docWithSteps(const QString &steps, const QString &concepts = QString())
 {
     return QStringLiteral(R"({
-      "schema_version": 2,
+      "schema_version": 3,
       "id": "lj-fluid",
       "title": "Tutorial 1",
       "collection": "softmatter",
@@ -52,15 +52,11 @@ const char *SHOW_STEP = R"({
   ]
 })";
 
-const char *EXPERIMENT_STEP = R"({
-  "id": "s-exp", "kind": "EXPERIMENT", "title": "Push the timestep",
-  "teach": "Raise it until the integrator fails.",
-  "params": [
-    { "id": "dt", "label": "timestep", "kind": "number",
-      "command": "units", "arg": 1,
-      "min": 0.001, "max": 0.06, "step": 0.005, "initial": 0.005 }
-  ],
-  "expect": "the total energy trace"
+const char *OBSERVE_STEP = R"({
+  "id": "s-obs", "kind": "OBSERVE", "title": "Run it",
+  "teach": "Now run what you have written.",
+  "anchor": "run", "call_to_action": "Press the Run button.",
+  "expect": "no error and a line of output"
 })";
 
 /// true when some finding of ERROR severity mentions @p fragment in its path
@@ -111,26 +107,10 @@ TEST(TutorialContentTest, ShowStepLoadsCleanly)
     EXPECT_FALSE(step->commands.at(0).notes.at(0).alternatives.isEmpty());
 }
 
-TEST(TutorialContentTest, ExperimentStepLoadsCleanly)
-{
-    const QString steps =
-        QString::fromLatin1(SHOW_STEP) + QStringLiteral(",") + QString::fromLatin1(EXPERIMENT_STEP);
-    QList<ContentIssue> issues;
-    const auto content = parseTutorialJson(docWithSteps(steps), &issues);
-
-    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
-    const TutorialStep *step = content.stepById(QStringLiteral("s-exp"));
-    ASSERT_NE(step, nullptr);
-    EXPECT_EQ(step->kind, StepKind::Experiment);
-    ASSERT_EQ(step->params.size(), 1);
-    EXPECT_EQ(step->params.at(0).kind, ParamKind::Number);
-    EXPECT_DOUBLE_EQ(step->params.at(0).initial, 0.005);
-}
-
 TEST(TutorialContentTest, MetadataIsParsed)
 {
     const auto content = parseTutorialJson(docWithSteps(SHOW_STEP));
-    EXPECT_EQ(content.schemaVersion(), 2);
+    EXPECT_EQ(content.schemaVersion(), 3);
     EXPECT_EQ(content.id(), QStringLiteral("lj-fluid"));
     EXPECT_EQ(content.tutorialNumber(), 1);
     EXPECT_EQ(content.skeletonFile(), QStringLiteral("initial.lmp"));
@@ -151,10 +131,10 @@ TEST(TutorialContentTest, DocLinkSplitsCommandAndStyle)
 
 // ---- schema version ------------------------------------------------------
 
-TEST(TutorialContentTest, RejectsTheVersionOneFormat)
+TEST(TutorialContentTest, RejectsOlderSchemaVersions)
 {
-    // v1 used verbs, validators and "___" holes; reading such a file as v2
-    // would silently misinterpret every step rather than fail
+    // v1 used verbs and "___" holes, v2 had parameter widgets; reading either
+    // as v3 would silently misinterpret every step rather than fail
     QList<ContentIssue> issues;
     parseTutorialJson(QByteArray(R"({"schema_version": 1, "id":"x","title":"X",
       "acts":[{"id":"a","title":"A","steps":[
@@ -201,22 +181,6 @@ TEST(TutorialContentTest, RejectsUnknownStepKind)
     EXPECT_TRUE(messageMentions(issues, QStringLiteral("unknown step kind")));
 }
 
-TEST(TutorialContentTest, ShowStepMustPresentSomething)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"SHOW","title":"T"})"), &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("presents nothing")));
-}
-
-TEST(TutorialContentTest, ExperimentNeedsAParameter)
-{
-    QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t"})"),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("params")));
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("just a run")));
-}
-
 TEST(TutorialContentTest, MultiLineCommandTextIsRejected)
 {
     // commands are presented one line at a time so each can be annotated
@@ -229,55 +193,75 @@ TEST(TutorialContentTest, MultiLineCommandTextIsRejected)
 
 // ---- parameters ----------------------------------------------------------
 
-TEST(TutorialContentTest, ParameterMustBindToACommandThatWasShown)
+TEST(TutorialContentTest, ObserveStepLoadsCleanly)
 {
-    // otherwise the run silently changes nothing
+    const QString steps =
+        QString::fromLatin1(SHOW_STEP) + QStringLiteral(",") + QString::fromLatin1(OBSERVE_STEP);
     QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t",
-      "params":[{"id":"p","label":"L","command":"nosuchcommand","arg":1,
-                 "min":0,"max":1}], "expect":"e"})"),
-                      &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("no earlier step puts in the script")));
+    const auto content = parseTutorialJson(docWithSteps(steps), &issues);
+
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    const TutorialStep *step = content.stepById(QStringLiteral("s-obs"));
+    ASSERT_NE(step, nullptr);
+    EXPECT_EQ(step->kind, StepKind::Observe);
+    EXPECT_EQ(step->anchor, StepAnchor::Run);
+    EXPECT_FALSE(step->callToAction.isEmpty());
 }
 
-TEST(TutorialContentTest, ParameterCannotRewriteTheCommandWord)
+TEST(TutorialContentTest, ObserveStepMayNotCarryCommands)
 {
+    // an OBSERVE points at something; commands belong to a SHOW
     QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t",
-      "params":[{"id":"p","label":"L","command":"units","arg":0,
-                 "min":0,"max":1}], "expect":"e"})"),
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"OBSERVE","title":"T","teach":"t",
+      "anchor":"chart", "commands":[{"text":"units lj"}]})"),
                       &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("arg")));
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("use SHOW to offer commands")));
 }
 
-TEST(TutorialContentTest, RejectsInvertedParameterRange)
+TEST(TutorialContentTest, ObserveStepNeedsAnAnchor)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(QString::fromLatin1(EXPERIMENT_STEP)
-                                       .replace(QStringLiteral("\"min\": 0.001"),
-                                                QStringLiteral("\"min\": 9.0"))),
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"OBSERVE","title":"T","teach":"t"})"),
                       &issues);
-    EXPECT_TRUE(messageMentions(issues, QStringLiteral("must be below max")));
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("anchor")));
 }
 
-TEST(TutorialContentTest, RejectsInitialOutsideTheRange)
+TEST(TutorialContentTest, ShowStepMustCarryCommands)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(QString::fromLatin1(EXPERIMENT_STEP)
-                                       .replace(QStringLiteral("\"initial\": 0.005"),
-                                                QStringLiteral("\"initial\": 5.0"))),
-                      &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("initial")));
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"SHOW","title":"T","teach":"t"})"), &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("use OBSERVE")));
 }
 
-TEST(TutorialContentTest, ChoiceParameterNeedsTwoChoices)
+TEST(TutorialContentTest, RejectsUnknownAnchor)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"EXPERIMENT","title":"T","teach":"t",
-      "params":[{"id":"p","label":"L","kind":"choice","command":"units","arg":1,
-                 "choices":["lj"]}], "expect":"e"})"),
+    parseTutorialJson(docWithSteps(R"({"id":"s","kind":"OBSERVE","title":"T","teach":"t",
+      "anchor":"kitchen"})"),
                       &issues);
-    EXPECT_TRUE(errorAt(issues, QStringLiteral("choices")));
+    EXPECT_TRUE(errorAt(issues, QStringLiteral("anchor")));
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("unknown anchor")));
+}
+
+TEST(TutorialContentTest, RunAnchorNeedsSomethingInTheScriptFirst)
+{
+    // pressing Run on an empty buffer teaches nothing
+    QList<ContentIssue> issues;
+    parseTutorialJson(docWithSteps(OBSERVE_STEP), &issues);
+    EXPECT_TRUE(messageMentions(issues, QStringLiteral("no earlier step has put anything")));
+}
+
+TEST(TutorialContentTest, OpenFileIsCarried)
+{
+    const QString steps =
+        QString::fromLatin1(SHOW_STEP) + QStringLiteral(",{\"id\":\"s2\",\"kind\":\"OBSERVE\","
+                                                        "\"title\":\"T\",\"teach\":\"t\","
+                                                        "\"anchor\":\"editor\","
+                                                        "\"open_file\":\"improved.min.lmp\"}");
+    const auto content       = parseTutorialJson(docWithSteps(steps));
+    const TutorialStep *step = content.stepById(QStringLiteral("s2"));
+    ASSERT_NE(step, nullptr);
+    EXPECT_EQ(step->openFile, QStringLiteral("improved.min.lmp"));
 }
 
 // ---- concepts and the reminder budget ------------------------------------
@@ -342,7 +326,7 @@ TEST(TutorialContentTest, RejectsDuplicateStepIds)
 TEST(TutorialContentTest, RejectsActWithNoSteps)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray(R"({"schema_version":2,"id":"x","title":"X",
+    parseTutorialJson(QByteArray(R"({"schema_version":3,"id":"x","title":"X",
       "acts":[{"id":"a","title":"A","steps":[]}]})"),
                       &issues);
     EXPECT_TRUE(errorAt(issues, QStringLiteral("steps")));
@@ -360,7 +344,7 @@ TEST(TutorialContentTest, ErroneousContentIsNotHandedOut)
 TEST(TutorialContentTest, MissingLicenseIsWarnedAbout)
 {
     QList<ContentIssue> issues;
-    parseTutorialJson(QByteArray(R"({"schema_version":2,"id":"x","title":"X",
+    parseTutorialJson(QByteArray(R"({"schema_version":3,"id":"x","title":"X",
       "acts":[{"id":"a","title":"A","steps":[
         {"id":"s","kind":"SHOW","title":"T","teach":"t"}]}]})"),
                       &issues);
@@ -393,7 +377,7 @@ TEST(TutorialContentTest, FormatIssuesTruncatesAndCounts)
 TEST(TutorialContentTest, StepKindNamesMatchTheFileSpelling)
 {
     EXPECT_EQ(stepKindName(StepKind::Show), QStringLiteral("SHOW"));
-    EXPECT_EQ(stepKindName(StepKind::Experiment), QStringLiteral("EXPERIMENT"));
+    EXPECT_EQ(stepKindName(StepKind::Observe), QStringLiteral("OBSERVE"));
 }
 
 // ---- the shipped content -------------------------------------------------
@@ -414,22 +398,30 @@ TEST(TutorialContentTest, ShippedTutorialOneLoadsWithoutIssues)
     EXPECT_GT(content.concepts().size(), 5);
 }
 
-TEST(TutorialContentTest, ShippedTutorialOneKeepsTheControlledFailure)
+TEST(TutorialContentTest, ShippedTutorialOneCoversBothHalves)
 {
-    // the deliberate instability is the reason this feature exists; if it ever
-    // disappears from the content the tutorial has lost its point
+    // the second half of section 3.1 -- regions, groups, write_data and the
+    // restart -- was missing entirely once, and is easy to lose again
     const auto content = loadTutorialFile(QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json"));
 
-    const TutorialStep *breakit = content.stepById(QStringLiteral("a4-s1"));
-    ASSERT_NE(breakit, nullptr);
-    EXPECT_EQ(breakit->kind, StepKind::Experiment);
-    ASSERT_FALSE(breakit->params.isEmpty());
-    EXPECT_EQ(breakit->params.at(0).command, QStringLiteral("timestep"));
-    // the range must actually reach the unstable region, or nothing breaks
-    EXPECT_GT(breakit->params.at(0).max, 0.02);
+    QStringList shown;
+    for (int a = 0; a < content.actCount(); ++a)
+        for (int s = 0;; ++s) {
+            const TutorialStep *step = content.step(a, s);
+            if (!step) break;
+            for (const auto &cmd : step->commands)
+                shown << cmd.text.section(QLatin1Char(' '), 0, 0);
+        }
+
+    for (const auto &required :
+         {"units", "region", "create_box", "create_atoms", "mass", "pair_style", "pair_coeff",
+          "thermo", "minimize", "fix", "timestep", "run", "write_data", "read_data", "group",
+          "delete_atoms", "variable", "compute", "velocity"})
+        EXPECT_TRUE(shown.contains(QLatin1String(required)))
+            << "the tutorial no longer teaches " << required;
 }
 
-TEST(TutorialContentTest, ShippedTutorialOneShowsCommandsRatherThanQuizzing)
+TEST(TutorialContentTest, ShippedTutorialOneAnnotatesWhatItShows)
 {
     const auto content = loadTutorialFile(QStringLiteral(TUTORIAL_CONTENT_DIR "/lj-fluid.json"));
     int commands       = 0;
@@ -443,9 +435,11 @@ TEST(TutorialContentTest, ShippedTutorialOneShowsCommandsRatherThanQuizzing)
                 annotations += static_cast<int>(cmd.notes.size());
         }
     }
-    EXPECT_GT(commands, 15);
-    // annotation is the whole point of showing rather than asking
-    EXPECT_GT(annotations, commands);
+    EXPECT_GT(commands, 40);
+    // annotation is the whole point of showing rather than asking.  Not every
+    // line needs a note -- a repeated "mass 2 5.0" explains itself -- but a
+    // tutorial where most commands arrive unannotated has become a transcript.
+    EXPECT_GT(annotations * 2, commands);
 }
 #endif
 

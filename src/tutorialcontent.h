@@ -20,14 +20,14 @@
 /**
  * @brief What a step asks of the user
  *
- * Three kinds, deliberately.  The tutorial is a guided walkthrough, not a
- * quiz: the user is shown what to write and why, and the challenge lives in
- * the experiments rather than in recall.  See doc/tutorial-mode-redesign.md
- * for why the earlier seven-verb model was retired.
+ * Two kinds, deliberately.  The tutorial is a guided tour rather than a quiz:
+ * a step either offers commands for the script or points at something in the
+ * window and explains it.  See doc/tutorial-mode-redesign.md for why the
+ * earlier verb and experiment models were retired.
  */
 enum class StepKind : quint8 {
-    Show,      ///< present commands with annotations; the user inserts them
-    Experiment ///< expose parameters, run the real simulation, show the result
+    Show,   ///< present commands with annotations; the user inserts them
+    Observe ///< point at a part of the GUI and explain what is there
 };
 
 /**
@@ -44,26 +44,6 @@ enum class StepAnchor : quint8 {
     Chart,  ///< the charts view
     Image,  ///< the snapshot image view
     Log     ///< the output view
-};
-
-/**
- * @brief Where a step's illustration comes from
- *
- * Deliberately never a bundled screenshot of the application itself: those
- * go stale the moment the UI changes.  The preferred source is a render of
- * the user's own system.
- */
-enum class FigureSource : quint8 {
-    None,    ///< no illustration
-    Snapshot ///< render the user's current system with the image viewer
-};
-
-/**
- * @brief Type of an experiment parameter widget
- */
-enum class ParamKind : quint8 {
-    Number, ///< a numeric value with a range and a step
-    Choice  ///< one of a fixed set of words
 };
 
 /**
@@ -129,49 +109,6 @@ struct CommandLine {
 };
 
 /**
- * @brief One knob an Experiment step exposes
- *
- * A parameter is bound to an argument of a command already in the script; the
- * panel rewrites exactly that token and leaves the rest of the buffer alone.
- */
-struct TutorialParam {
-    QString id;                         ///< identifier, unique within the step
-    QString label;                      ///< what the widget is called
-    ParamKind kind = ParamKind::Number; ///< which widget to build
-    QString command;                    ///< command whose argument this rewrites, e.g. "timestep"
-    int argIndex   = 1;                 ///< which argument of that command
-    double min     = 0.0;               ///< Number: lowest offered value
-    double max     = 0.0;               ///< Number: highest offered value
-    double step    = 0.0;               ///< Number: increment between offered values
-    double initial = 0.0;               ///< Number: value the widget starts at
-    QStringList choices;                ///< Choice: the offered words
-    QString initialChoice;              ///< Choice: the word the widget starts at
-    QString unit;                       ///< shown beside the widget, e.g. "sigma"
-    QString explain;                    ///< what changing this does
-};
-
-/**
- * @brief One answer offered by an optional pre-run prediction
- */
-struct TutorialOption {
-    QString text;     ///< the answer as shown to the user
-    QString feedback; ///< what this answer teaches, whether or not it is correct
-};
-
-/**
- * @brief An optional question asked immediately before an experiment runs
- *
- * Never a gate.  It exists because a result lands harder against a stated
- * expectation, and it can always be dismissed without answering.
- */
-struct TutorialPrediction {
-    bool present = false;          ///< whether the step declared one at all
-    QString question;              ///< the question
-    QList<TutorialOption> options; ///< the offered answers
-    int correctOption = -1;        ///< index of the answer that is right
-};
-
-/**
  * @brief One step of a tutorial
  */
 struct TutorialStep {
@@ -182,13 +119,10 @@ struct TutorialStep {
     QString docCommand;             ///< command name for the documentation link
     QString docStyle;               ///< optional style refining the documentation link
 
-    FigureSource figure = FigureSource::None; ///< illustration, if any
-    QString figureCaption;                    ///< caption shown under it
-
-    QList<CommandLine> commands;   ///< Show: the lines to present and insert
-    QList<TutorialParam> params;   ///< Experiment: the knobs
-    TutorialPrediction prediction; ///< Experiment: the optional pre-run question
-    QString expect;                ///< Experiment: what to look for in the result
+    QList<CommandLine> commands; ///< the lines to present and insert
+    /// what the user should see once they act; shown after the run rather than
+    /// before it, so it reads as an observation and not as an instruction
+    QString expect;
 
     StepAnchor anchor = StepAnchor::None; ///< what the callout points at
     /// one line telling the user what to do now, shown under the prose; the

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "id": "lj-fluid",
   "title": "Tutorial 1 -- Lennard-Jones fluid",
   "collection": "softmatter",
@@ -13,122 +13,60 @@
   },
 
   "concepts": [
-    { "id": "reduced-units",
-      "term": "reduced units",
-      "explain": "In lj units every quantity is dimensionless: distances are multiples of sigma, energies multiples of epsilon. Nothing is in angstroms or kcal/mol." },
-    { "id": "atom-type",
-      "term": "atom type",
-      "explain": "Every atom carries a numeric type. Force field parameters are assigned per type, not per atom, so type is what decides how an atom behaves." },
-    { "id": "region-vs-box",
-      "term": "region versus box",
-      "explain": "A region is a named shape in space. The simulation box is built from a region, and only then can atoms exist." },
-    { "id": "random-seed",
-      "term": "random seed",
-      "explain": "An integer that fixes the random sequence. The same seed reproduces the same run exactly; change it for a statistically independent repeat." },
-    { "id": "lj-cutoff",
-      "term": "cutoff",
+    { "id": "reduced-units", "term": "reduced units",
+      "explain": "In lj units everything is dimensionless: distances are multiples of sigma, energies multiples of epsilon. Nothing is in angstroms or kcal/mol." },
+    { "id": "atom-type", "term": "atom type",
+      "explain": "Every atom carries a numeric type. Force field parameters are assigned per type, not per atom, so the type is what decides how an atom behaves." },
+    { "id": "region-vs-box", "term": "region versus box",
+      "explain": "A region is a named shape in space. The simulation box is built from a region, and only once the box exists can atoms exist." },
+    { "id": "random-seed", "term": "random seed",
+      "explain": "An integer fixing the random sequence. The same seed reproduces a run exactly; change it for a statistically independent repeat." },
+    { "id": "lj-cutoff", "term": "cutoff",
       "explain": "Beyond the cutoff the pair interaction is simply not computed. Too short clips the attractive well; too long spends compute on forces near zero." },
-    { "id": "pair-mixing",
-      "term": "mixing rules",
-      "explain": "Parameters for unlike pairs are derived from the like pairs, by default as geometric means. You rarely need to write them out yourself." },
-    { "id": "fix-anatomy",
-      "term": "fix ID group style",
+    { "id": "pair-mixing", "term": "mixing rules",
+      "explain": "Parameters for unlike pairs are derived from the like pairs, by default as geometric means, so you rarely write them out yourself." },
+    { "id": "fix-anatomy", "term": "fix ID group style",
       "explain": "Every fix reads the same way: an ID you choose, the group it acts on, then the style and its arguments." },
-    { "id": "timestep-stability",
-      "term": "timestep",
-      "explain": "The integrator advances time in discrete jumps. Each jump must be short compared with the fastest motion, or the integration goes unstable." },
-    { "id": "thermo-output",
-      "term": "thermo output",
-      "explain": "LAMMPS prints a line of thermodynamic data every so many steps, and the GUI charts whatever columns you ask for." }
+    { "id": "timestep-stability", "term": "timestep",
+      "explain": "The integrator advances time in discrete jumps. Each must be short compared with the fastest motion, or the integration goes unstable." },
+    { "id": "thermo-output", "term": "thermo output",
+      "explain": "LAMMPS prints a line of thermodynamic data every so many steps, and the GUI charts whichever columns you ask for." },
+    { "id": "group-anatomy", "term": "group",
+      "explain": "A named subset of the atoms. Groups can be built from types, regions, or set operations on other groups, and most commands act on one." },
+    { "id": "data-file", "term": "data file",
+      "explain": "A text file holding the box, the atoms and their parameters. Writing one lets a later run start from this state instead of rebuilding it." },
+    { "id": "equal-variable", "term": "equal-style variable",
+      "explain": "An expression evaluated during the run that returns a single number, so it can be printed alongside the thermo output." },
+    { "id": "compute-consumer", "term": "computes need a consumer",
+      "explain": "A compute calculates nothing on its own. Something has to reference it -- another compute, a fix, or a thermo_style column -- before it runs." }
   ],
 
   "acts": [
     {
       "id": "act1",
-      "title": "Build the world",
+      "title": "Initialization",
       "steps": [
         {
-          "id": "a1-s1",
-          "kind": "SHOW",
-          "title": "The five sections of an input script",
-          "teach": "A LAMMPS script is read strictly top to bottom, and the order matters: some commands only work *before* the simulation box exists, others only after. Rather than memorize that, the script is laid out in five labelled sections and filled in turn.\n\nYour editor already holds them as comments. Everything after a `#` is ignored by LAMMPS.\n\nWe start with **Initialization**: what units to work in, how many dimensions, what an atom is, and what happens at the edges of the box.",
-          "doc_link": "units",
+          "id": "a1-s1", "kind": "SHOW", "title": "Choose the rules of the world",
+          "teach": "A LAMMPS script is read strictly top to bottom, and order matters: some commands only work *before* the simulation box exists, others only after. The script is laid out in five labelled sections and filled in turn.\n\nThis first section sets the global choices. None of these four are strictly required -- each matches a LAMMPS default -- but writing them down means the next person to read your script does not have to know what the defaults are.",
+          "doc_link": "units", "anchor": "editor",
           "commands": [
-            { "text": "units lj",
-              "explain": "Work in reduced units, where the Lennard-Jones parameters are defined as 1.",
+            { "text": "units lj", "explain": "Work in reduced units, where the Lennard-Jones parameters are defined as 1.",
               "concept": "reduced-units",
-              "notes": [
-                { "arg": 1, "note": "the unit system",
-                  "alternatives": "`real` gives angstroms and kcal/mol; `metal` gives angstroms and eV. Changing this changes the meaning of every number below it.",
-                  "concept": "reduced-units" }
-              ] },
-            { "text": "dimension 3",
-              "explain": "Simulate in 3D. In 2D the atoms are confined to the xy-plane.",
-              "notes": [
-                { "arg": 1, "note": "number of spatial dimensions",
-                  "alternatives": "`2` confines atoms to the xy-plane, which is a common trick for cheap visual demonstrations." }
-              ] },
-            { "text": "atom_style atomic",
-              "explain": "The simplest kind of particle: a point with a mass and a type, nothing else.",
+              "notes": [ { "arg": 1, "note": "the unit system",
+                "alternatives": "`real` gives angstroms and kcal/mol, `metal` angstroms and eV. This changes the meaning of every number below it.",
+                "concept": "reduced-units" } ] },
+            { "text": "dimension 3", "explain": "Simulate in three dimensions.",
+              "notes": [ { "arg": 1, "note": "number of spatial dimensions",
+                "alternatives": "`2` confines atoms to the xy-plane, which makes for cheap visual demonstrations." } ] },
+            { "text": "atom_style atomic", "explain": "The simplest particle: a point with a mass and a type.",
               "concept": "atom-type",
-              "notes": [
-                { "arg": 1, "note": "what an atom carries",
-                  "alternatives": "`charge` adds a per-atom charge, `molecular` adds bonds and molecule IDs. Pick the cheapest style that holds what you need.",
-                  "concept": "atom-type" }
-              ] },
-            { "text": "boundary p p p",
-              "explain": "Periodic in all three directions: an atom leaving one face re-enters through the opposite one.",
-              "notes": [
-                { "arg": 1, "note": "the x direction",
-                  "alternatives": "`f` is a fixed wall, `s` shrink-wraps to the atoms, `m` shrink-wraps with a minimum. A slab would use `p p f`." }
-              ] }
-          ]
-        },
-        {
-          "id": "a1-s2",
-          "kind": "SHOW",
-          "title": "A box, and atoms in it",
-          "teach": "Now the **System definition** section. A *region* is only a shape; the simulation box is built from it, and only then can atoms exist.\n\nThis tutorial simulates a binary mixture: 1500 small atoms of type 1 and 100 larger ones of type 2, dropped in at random.",
-          "doc_link": "region",
-          "commands": [
-            { "text": "region simbox block -20 20 -20 20 -20 20",
-              "explain": "Define a cube 40 units on a side, centred on the origin, named simbox.",
-              "concept": "region-vs-box",
-              "notes": [
-                { "arg": 1, "note": "the name you will refer to it by",
-                  "alternatives": "Any name works; you use it again in the next command.",
-                  "concept": "region-vs-box" },
-                { "arg": 2, "note": "the shape",
-                  "alternatives": "`sphere`, `cylinder` and `prism` are also available, and regions can be combined with union and intersect." },
-                { "arg": 3, "note": "the six bounds, as xlo xhi ylo yhi zlo zhi",
-                  "alternatives": "Making the box smaller at fixed atom count raises the density, which you will do later." }
-              ] },
-            { "text": "create_box 2 simbox",
-              "explain": "Build the box from that region, with room for two atom types.",
-              "concept": "atom-type",
-              "notes": [
-                { "arg": 1, "note": "how many atom types will exist",
-                  "alternatives": "This is locked in from here on. Referring to a type 3 later would be an error, and every type declared needs a mass and pair parameters.",
-                  "concept": "atom-type" }
-              ] },
-            { "text": "create_atoms 1 random 1500 34134 simbox overlap 0.3",
-              "explain": "Drop 1500 atoms of type 1 into the box at random positions.",
-              "concept": "random-seed",
-              "notes": [
-                { "arg": 3, "note": "how many atoms",
-                  "alternatives": "More atoms means better statistics and a slower run." },
-                { "arg": 4, "note": "the random seed",
-                  "alternatives": "Change it for a different arrangement of the same system.",
-                  "concept": "random-seed" },
-                { "arg": 7, "note": "minimum separation enforced while placing",
-                  "alternatives": "Without it, two atoms can land almost on top of each other. The Lennard-Jones repulsion goes as 1/r^12, so that produces an enormous force -- exactly the instability you will trigger on purpose later." }
-              ] },
-            { "text": "create_atoms 2 random 100 12756 simbox overlap 0.3",
-              "explain": "Add 100 atoms of the second, heavier type. A different seed gives a different arrangement.",
-              "notes": [
-                { "arg": 1, "note": "the atom type",
-                  "concept": "atom-type" }
-              ] }
+              "notes": [ { "arg": 1, "note": "what each atom carries",
+                "alternatives": "`charge` adds a per-atom charge, `molecular` adds bonds and molecule IDs. Pick the cheapest style that holds what you need.",
+                "concept": "atom-type" } ] },
+            { "text": "boundary p p p", "explain": "Periodic in all three directions: an atom leaving one face re-enters through the opposite one.",
+              "notes": [ { "arg": 1, "note": "the x direction, then y, then z",
+                "alternatives": "`f` is a fixed wall, `s` shrink-wraps to the atoms, `m` shrink-wraps with a minimum. A slab geometry would use `p p f`." } ] }
           ]
         }
       ]
@@ -136,81 +74,36 @@
 
     {
       "id": "act2",
-      "title": "Give the atoms physics",
+      "title": "System definition",
       "steps": [
         {
-          "id": "a2-s1",
-          "kind": "SHOW",
-          "title": "Masses and how atoms feel each other",
-          "teach": "The **Settings** section. Nothing can be computed until every atom type has a mass and every pair of types knows how to interact.\n\nThe Lennard-Jones potential is `4*eps*[(sig/r)^12 - (sig/r)^6]`. The 12 term is the hard repulsion at close range; the 6 term is the weak long-range attraction that lets a fluid condense instead of dispersing.",
-          "doc_link": "pair_style lj/cut",
+          "id": "a2-s1", "kind": "SHOW", "title": "A box, and atoms in it",
+          "teach": "A *region* is only a shape; the simulation box is built from it, and only then can atoms exist.\n\nThis tutorial simulates a binary mixture: 1500 small atoms of type 1 and 100 larger ones of type 2, dropped in at random.",
+          "doc_link": "region", "anchor": "editor",
           "commands": [
-            { "text": "mass 1 1.0",
-              "explain": "Atom type 1 is the light species.",
+            { "text": "region simbox block -20 20 -20 20 -20 20",
+              "explain": "A cube 40 units on a side, centred on the origin, named simbox.",
+              "concept": "region-vs-box",
               "notes": [
-                { "arg": 1, "note": "which atom type", "concept": "atom-type" }
-              ] },
-            { "text": "mass 2 5.0",
-              "explain": "Type 2 is five times heavier, so at the same temperature it moves more sluggishly." },
-            { "text": "pair_style lj/cut 4.0",
-              "explain": "All pairs interact through a truncated Lennard-Jones potential.",
-              "concept": "lj-cutoff",
+                { "arg": 2, "note": "the shape",
+                  "alternatives": "`sphere`, `cylinder` and `prism` are also available, and regions combine with union and intersect. You will use a cylinder in the second half of this tutorial." },
+                { "arg": 3, "note": "the six bounds, as xlo xhi ylo yhi zlo zhi",
+                  "alternatives": "Shrinking the box at a fixed atom count raises the density." } ] },
+            { "text": "create_box 2 simbox", "explain": "Build the box from that region, with room for two atom types.",
+              "concept": "atom-type",
+              "notes": [ { "arg": 1, "note": "how many atom types will ever exist",
+                "alternatives": "Locked in from here. Referring to a type 3 later is an error, and every type declared needs a mass and pair parameters.",
+                "concept": "atom-type" } ] },
+            { "text": "create_atoms 1 random 1500 34134 simbox overlap 0.3",
+              "explain": "Drop 1500 atoms of type 1 into the box at random positions.",
+              "concept": "random-seed",
               "notes": [
-                { "arg": 1, "note": "the interaction model",
-                  "alternatives": "`lj/cut/coul/long` adds long-range electrostatics; `eam` is for metals. This one line decides the physics." },
-                { "arg": 2, "note": "the global cutoff, in sigma",
-                  "alternatives": "2.5 is the more common convention in the literature; this tutorial keeps more of the attractive tail at 4.0.",
-                  "concept": "lj-cutoff" }
-              ] },
-            { "text": "pair_coeff 1 1 1.0 1.0",
-              "explain": "Epsilon and sigma for a type 1 atom meeting another type 1 atom.",
-              "notes": [
-                { "arg": 3, "note": "epsilon, the depth of the potential well",
-                  "alternatives": "Larger epsilon means a stronger attraction and a fluid that condenses more readily." },
-                { "arg": 4, "note": "sigma, the distance where the energy crosses zero",
-                  "alternatives": "Roughly the atom's diameter. There is no default for either value: lj/cut requires both." }
-              ] },
-            { "text": "pair_coeff 2 2 0.5 3.0",
-              "explain": "The heavy species: a shallower well but a much larger diameter.",
-              "concept": "pair-mixing",
-              "notes": [
-                { "arg": 3, "note": "epsilon for the 2-2 pair",
-                  "alternatives": "You never write a 1-2 line. LAMMPS mixes it: eps_12 = sqrt(1.0 x 0.5) = 0.707, sigma_12 = sqrt(1.0 x 3.0) = 1.732. `pair_modify` chooses a different rule.",
-                  "concept": "pair-mixing" }
-              ] }
-          ]
-        },
-        {
-          "id": "a2-s2",
-          "kind": "SHOW",
-          "title": "Ask for output, then relax the structure",
-          "teach": "The **Monitoring** and **Run** sections.\n\nThe atoms were placed at random, so some pairs sit far closer than sigma and the potential energy starts large and *positive*. Minimization slides them downhill into a nearby local minimum before any dynamics begin.",
-          "doc_link": "minimize",
-          "figure": { "source": "snapshot", "caption": "Your system before minimization -- atoms placed at random." },
-          "run_after_insert": true,
-          "checkpoint": true,
-          "commands": [
-            { "text": "thermo 10",
-              "explain": "Print a line of thermodynamic data every 10 steps.",
-              "concept": "thermo-output",
-              "notes": [
-                { "arg": 1, "note": "steps between reports",
-                  "alternatives": "Larger values print less and run marginally faster. This run is short, so keep it frequent.",
-                  "concept": "thermo-output" }
-              ] },
-            { "text": "thermo_style custom step etotal press",
-              "explain": "Report the step number, the total energy, and the pressure.",
-              "notes": [
-                { "arg": 2, "note": "the columns to print",
-                  "alternatives": "`temp`, `pe` and `ke` are the other common ones. Whatever you list here is what the Charts window can plot.",
-                  "concept": "thermo-output" }
-              ] },
-            { "text": "minimize 1.0e-6 1.0e-6 1000 10000",
-              "explain": "Slide the atoms downhill until one of four stopping criteria is met.",
-              "notes": [
-                { "arg": 1, "note": "energy tolerance, then force tolerance, then iteration and evaluation limits",
-                  "alternatives": "Minimization finds a *local* minimum, never the global one. That is fine here: the point is only to remove the bad contacts." }
-              ] }
+                { "arg": 4, "note": "the random seed",
+                  "alternatives": "Change it for a different arrangement of the same system.", "concept": "random-seed" },
+                { "arg": 7, "note": "minimum separation enforced while placing",
+                  "alternatives": "Without it two atoms can land almost on top of each other. The Lennard-Jones repulsion goes as 1/r^12, so that produces an enormous force -- exactly the instability you will trigger deliberately later." } ] },
+            { "text": "create_atoms 2 random 100 12756 simbox overlap 0.3",
+              "explain": "Add 100 atoms of the heavier second type, with a different seed so they land elsewhere." }
           ]
         }
       ]
@@ -218,145 +111,328 @@
 
     {
       "id": "act3",
-      "title": "Make it move",
+      "title": "Settings",
       "steps": [
         {
-          "id": "a3-s1",
-          "kind": "SHOW",
-          "title": "Integrate the equations of motion",
-          "teach": "Nothing moves in LAMMPS unless a *fix* makes it move. `fix nve` integrates Newton's equations with the velocity-Verlet algorithm and adds nothing else -- no thermostat, no barostat.\n\nWith periodic boundaries and no thermostat, this samples the microcanonical (NVE) ensemble: constant number of particles, volume and energy.",
-          "doc_link": "fix nve",
+          "id": "a3-s1", "kind": "SHOW", "title": "Masses, and how atoms feel each other",
+          "teach": "Nothing can be computed until every atom type has a mass and every pair of types knows how to interact.\n\nThe Lennard-Jones potential is `4*eps*[(sig/r)^12 - (sig/r)^6]`. The 12 term is the hard repulsion at close range; the 6 term is the weak long-range attraction that lets a fluid condense instead of dispersing.",
+          "doc_link": "pair_style lj/cut", "anchor": "editor",
           "commands": [
-            { "text": "thermo 50",
-              "explain": "Report less often now: this run is much longer than the minimization.",
-              "concept": "thermo-output" },
-            { "text": "thermo_style custom step temp etotal pe ke press",
-              "explain": "Once the atoms move there is a temperature and a kinetic energy worth watching, and pe + ke = etotal.",
-              "concept": "thermo-output" },
-            { "text": "fix mynve all nve",
-              "explain": "Integrate every atom's motion, every step.",
-              "concept": "fix-anatomy",
+            { "text": "mass 1 1.0", "explain": "Type 1 is the light species." },
+            { "text": "mass 2 5.0", "explain": "Type 2 is five times heavier, so at the same temperature it moves more sluggishly." },
+            { "text": "pair_style lj/cut 4.0", "explain": "All pairs interact through a truncated Lennard-Jones potential.",
+              "concept": "lj-cutoff",
               "notes": [
-                { "arg": 1, "note": "an ID you choose, used later to modify or delete this fix",
-                  "concept": "fix-anatomy" },
-                { "arg": 2, "note": "the group it acts on",
-                  "alternatives": "`all` is a default group containing every atom. You can define your own groups to thermostat only part of a system." },
-                { "arg": 3, "note": "the fix style",
-                  "alternatives": "`nvt` would add a thermostat and hold temperature instead of energy; `npt` would also control pressure." }
-              ] },
-            { "text": "timestep 0.005",
-              "explain": "Advance time in steps of 0.005 reduced time units.",
-              "concept": "timestep-stability",
+                { "arg": 1, "note": "the interaction model",
+                  "alternatives": "`lj/cut/coul/long` adds long-range electrostatics, `eam` is for metals. This one line decides the physics." },
+                { "arg": 2, "note": "the global cutoff, in sigma",
+                  "alternatives": "2.5 is the more common convention in the literature; 4.0 keeps more of the attractive tail.",
+                  "concept": "lj-cutoff" } ] },
+            { "text": "pair_coeff 1 1 1.0 1.0", "explain": "Epsilon and sigma for a type 1 atom meeting another type 1 atom.",
               "notes": [
-                { "arg": 1, "note": "how far time moves each step",
-                  "alternatives": "This is the number you are about to break on purpose.",
-                  "concept": "timestep-stability" }
-              ] },
-            { "text": "run 25000",
-              "explain": "125 reduced time units of dynamics. The system starts far from equilibrium: potential energy falls while kinetic energy climbs, until both plateau.",
-              "notes": [
-                { "arg": 1, "note": "number of steps",
-                  "alternatives": "Longer runs give better statistics. Everything here is deliberately short enough to finish on a laptop." }
-              ] }
-          ],
-          "checkpoint": true,
-          "run_after_insert": true,
-          "figure": { "source": "snapshot", "caption": "Your equilibrated binary mixture." }
+                { "arg": 3, "note": "epsilon, the depth of the potential well",
+                  "alternatives": "A larger epsilon means a stronger attraction and a fluid that condenses more readily." },
+                { "arg": 4, "note": "sigma, the distance where the energy crosses zero",
+                  "alternatives": "Roughly the atom's diameter. There is no default for either: lj/cut requires both." } ] },
+            { "text": "pair_coeff 2 2 0.5 3.0", "explain": "The heavy species: a shallower well but a much larger diameter.",
+              "concept": "pair-mixing",
+              "notes": [ { "arg": 3, "note": "epsilon for the 2-2 pair",
+                "alternatives": "You never write a 1-2 line. LAMMPS mixes it: eps_12 = sqrt(1.0 x 0.5) = 0.707, sigma_12 = sqrt(1.0 x 3.0) = 1.732. `pair_modify` chooses another rule.",
+                "concept": "pair-mixing" } ] }
+          ]
         }
       ]
     },
 
     {
       "id": "act4",
-      "title": "Break it on purpose",
+      "title": "A single point of energy",
       "steps": [
         {
-          "id": "a4-s1",
-          "kind": "EXPERIMENT",
-          "title": "Push the timestep until it fails",
-          "teach": "Every MD practitioner meets this failure, usually at the worst possible moment. Far better to meet it here, in a system you can reset in seconds.\n\nRaise the timestep and re-run. Somewhere above about 0.02 the integrator can no longer track the fastest collisions: it steps an atom straight through its neighbour's repulsive core, the atom comes out with an enormous velocity, and the total energy climbs without bound.\n\nIf the run stops with **ERROR: Lost atoms**, that is what happened. It almost never means atoms were really lost -- it means the integration went unstable, and the timestep is the first thing to check.",
-          "doc_link": "timestep",
-          "params": [
-            { "id": "dt", "label": "timestep", "kind": "number",
-              "command": "timestep", "arg": 1,
-              "min": 0.001, "max": 0.06, "step": 0.005, "initial": 0.005,
-              "explain": "Start where you are, then push it up in stages and re-run each time. Watch the total energy column rather than waiting for an error." }
-          ],
-          "prediction": {
-            "question": "Before you run it -- what will the total energy do at a timestep of 0.05?",
-            "options": [
-              { "text": "Stay flat; NVE conserves energy",
-                "feedback": "It does in exact arithmetic, and with a good timestep it very nearly does in practice. But conservation is a property of the *equations*, not of the approximation used to integrate them." },
-              { "text": "Climb without bound",
-                "feedback": "Right. Energy is created out of nothing because the integrator is no longer solving the equations of motion -- it is generating noise." },
-              { "text": "Fall towards zero",
-                "feedback": "Energy is not being drained anywhere: there is no thermostat and no friction in this script. The failure mode is runaway, not decay." }
-            ],
-            "correct_option": 1
-          },
-          "expect": "the total energy trace in the Charts window, and whether the run survives to the end"
+          "id": "a4-s1", "kind": "SHOW", "title": "Ask for output, then compute once",
+          "teach": "`run 0` initialises forces and energies without advancing time at all. It is the cheapest possible check that the system is complete and self-consistent.",
+          "doc_link": "thermo_style", "anchor": "editor",
+          "commands": [
+            { "text": "thermo 10", "explain": "Print a line of thermodynamic data every 10 steps.",
+              "concept": "thermo-output",
+              "notes": [ { "arg": 1, "note": "steps between reports",
+                "alternatives": "Larger values print less. This run is short, so keep it frequent.", "concept": "thermo-output" } ] },
+            { "text": "thermo_style custom step etotal press", "explain": "Report the step number, the total energy, and the pressure.",
+              "notes": [ { "arg": 2, "note": "the columns to print",
+                "alternatives": "`temp`, `pe` and `ke` are the other common ones. Whatever you list here is what the Charts window can plot.",
+                "concept": "thermo-output" } ] },
+            { "text": "run 0 post no", "explain": "Compute forces and energy once, without taking a single timestep.",
+              "notes": [ { "arg": 2, "note": "suppress the post-run summary",
+                "alternatives": "Leaving it out prints the usual timing and statistics block, which is noise for a zero-step run." } ] }
+          ]
         },
         {
-          "id": "a4-s2",
-          "kind": "EXPERIMENT",
-          "title": "Put it back, and notice what LAMMPS never told you",
-          "teach": "Set the timestep back to something stable and confirm the system behaves again.\n\nNote what LAMMPS did **not** do: it accepted `timestep 0.05` without a word of complaint, because that is perfectly valid syntax. No error message told you the value was wrong. Only the physics did -- which is why watching the energy trace is not optional.",
-          "doc_link": "timestep",
-          "params": [
-            { "id": "dt", "label": "timestep", "kind": "number",
-              "command": "timestep", "arg": 1,
-              "min": 0.001, "max": 0.06, "step": 0.005, "initial": 0.005,
-              "explain": "0.005 is where this tutorial started, and it is a conventional choice for Lennard-Jones in reduced units." }
-          ],
-          "expect": "a total energy that fluctuates around a constant value instead of climbing",
+          "id": "a4-s2", "kind": "OBSERVE", "title": "Run it", "anchor": "run",
+          "teach": "Your system is complete: a box, atoms, masses and interactions. Run it once to confirm LAMMPS agrees.",
+          "call_to_action": "Press the Run button.",
+          "expect": "no error, and a single line of output at step 0",
           "checkpoint": true
+        },
+        {
+          "id": "a4-s3", "kind": "OBSERVE", "title": "The first number", "anchor": "log",
+          "teach": "The total energy at step 0 is large and **positive**.\n\nThat is expected, and it is the whole reason the next act exists. The atoms were placed at random; `overlap 0.3` prevented the very worst contacts, but 0.3 is still well inside sigma for the heavy species, so plenty of pairs sit on the steep repulsive wall where the 1/r^12 term dominates.",
+          "call_to_action": "Look at the etotal column in the Output window.",
+          "expect": "a large positive total energy"
         }
       ]
     },
 
     {
       "id": "act5",
-      "title": "Play with it",
+      "title": "Energy minimization",
       "steps": [
         {
-          "id": "a5-s1",
-          "kind": "EXPERIMENT",
-          "title": "Choose a temperature instead of accepting one",
-          "teach": "So far the temperature has been whatever the system happened to settle at -- nobody chose it. A Langevin thermostat adds friction and a random kick to every atom; the two balance at a target temperature, and the ensemble becomes canonical (NVT) rather than microcanonical.\n\nInsert the thermostat first if it is not in your script yet, then try different target temperatures.",
-          "doc_link": "fix langevin",
+          "id": "a5-s1", "kind": "SHOW", "title": "Relax the structure",
+          "teach": "Rather than start dynamics from a bad configuration, slide the atoms downhill into a nearby local minimum first.\n\nLAMMPS stops when any one of four criteria is met, in this order: an energy tolerance, a force tolerance, a maximum number of iterations, and a maximum number of force evaluations. It then reports which one it was.",
+          "doc_link": "minimize", "anchor": "editor",
           "commands": [
-            { "text": "fix mylgv all langevin 1.0 1.0 0.1 10917",
-              "explain": "Hold the temperature at 1.0 throughout the run.",
-              "concept": "fix-anatomy",
-              "notes": [
-                { "arg": 4, "note": "target temperature at the start of the run",
-                  "alternatives": "Making the start and end values differ ramps the temperature over the run, which is how you heat or quench a system." },
-                { "arg": 6, "note": "the damping time",
-                  "alternatives": "Smaller values couple the thermostat more strongly and disturb the dynamics more; larger values equilibrate more slowly." },
-                { "arg": 7, "note": "the random seed", "concept": "random-seed" }
-              ] }
-          ],
-          "params": [
-            { "id": "temp", "label": "target temperature", "kind": "number",
-              "command": "fix", "arg": 4,
-              "min": 0.2, "max": 4.0, "step": 0.2, "initial": 1.0,
-              "explain": "Low temperatures let the attraction dominate and the fluid condenses; high temperatures push it towards a gas. Watch the snapshot as well as the chart." }
-          ],
-          "expect": "how the structure changes between a cold and a hot run -- and how long the temperature takes to settle"
+            { "text": "minimize 1.0e-6 1.0e-6 1000 10000",
+              "explain": "Iterate downhill until one of the four stopping criteria is met.",
+              "notes": [ { "arg": 1, "note": "energy tolerance, force tolerance, max iterations, max evaluations",
+                "alternatives": "Minimization finds a *local* minimum, never the global one. For anything but a trivial system there is no way to reach the global minimum this way." } ] }
+          ]
         },
         {
-          "id": "a5-s2",
-          "kind": "EXPERIMENT",
-          "title": "Change the mixture itself",
-          "teach": "Two last things worth trying, both one number each.\n\nMake the heavy species attract itself strongly and see whether the two components separate. Or change how many large atoms there are and watch the structure change.\n\nNothing here is graded, and the script is yours now.",
-          "doc_link": "pair_coeff",
-          "params": [
-            { "id": "eps22", "label": "epsilon for the heavy pair", "kind": "number",
-              "command": "pair_coeff", "arg": 3,
-              "min": 0.1, "max": 3.0, "step": 0.1, "initial": 0.5,
-              "explain": "Raising this makes large atoms stick to each other. Past about 2.0 they tend to cluster together rather than mix." }
-          ],
-          "expect": "whether the heavy atoms stay dispersed or clump into a separate phase"
+          "id": "a5-s2", "kind": "OBSERVE", "title": "Watch it fall", "anchor": "run",
+          "teach": "Delete the `run 0 post no` line first -- it has done its job -- then run again.",
+          "call_to_action": "Press the Run button.",
+          "expect": "the potential energy dropping quickly and then levelling off"
+        },
+        {
+          "id": "a5-s3", "kind": "OBSERVE", "title": "Positive to negative", "anchor": "chart",
+          "teach": "The sign change is the whole story. The atoms started jammed against each other and have moved to comfortable separations near the bottom of the Lennard-Jones well.\n\nDuring minimization there is no kinetic energy at all -- nothing is moving, atoms are simply relocated downhill -- so the total energy *is* the potential energy.",
+          "call_to_action": "Look at the energy curve in the Charts window.",
+          "expect": "energy crossing from positive to negative and flattening",
+          "checkpoint": true
+        },
+        {
+          "id": "a5-s4", "kind": "OBSERVE", "title": "See the system", "anchor": "image",
+          "teach": "The atoms are visibly clumping together rather than sitting on a random scatter. This is your system, rendered by LAMMPS itself from the state you just produced.",
+          "call_to_action": "Open the Image Viewer from the Run menu.",
+          "expect": "atoms gathered into contact rather than spread at random"
+        }
+      ]
+    },
+
+    {
+      "id": "act6",
+      "title": "Molecular dynamics",
+      "steps": [
+        {
+          "id": "a6-s1", "kind": "SHOW", "title": "Let go",
+          "teach": "Nothing moves in LAMMPS unless a *fix* makes it move. `fix nve` integrates Newton's equations with the velocity-Verlet algorithm and adds nothing else.\n\nWith periodic boundaries and no thermostat, this samples the microcanonical (NVE) ensemble: constant number of particles, volume and energy.",
+          "doc_link": "fix nve", "anchor": "editor",
+          "commands": [
+            { "text": "thermo 50", "explain": "Report less often: this run is far longer than the minimization.",
+              "concept": "thermo-output" },
+            { "text": "thermo_style custom step temp etotal pe ke press",
+              "explain": "Once atoms move there is a temperature and a kinetic energy worth watching, and pe + ke = etotal." },
+            { "text": "fix mynve all nve", "explain": "Integrate every atom's motion, every step.",
+              "concept": "fix-anatomy",
+              "notes": [
+                { "arg": 1, "note": "an ID you choose, used later to modify or delete this fix", "concept": "fix-anatomy" },
+                { "arg": 2, "note": "the group it acts on",
+                  "alternatives": "`all` is a default group containing every atom. Your own groups let you thermostat only part of a system." },
+                { "arg": 3, "note": "the fix style",
+                  "alternatives": "`nvt` adds a thermostat and holds temperature instead of energy; `npt` also controls pressure." } ] },
+            { "text": "timestep 0.005", "explain": "Advance time in steps of 0.005 reduced time units.",
+              "concept": "timestep-stability",
+              "notes": [ { "arg": 1, "note": "how far time moves each step",
+                "alternatives": "Raise this too far and the integrator steps an atom straight through its neighbour's repulsive core. Try 0.05 later and watch the total energy diverge -- it is the most common failure in molecular dynamics, and worth causing once on purpose.",
+                "concept": "timestep-stability" } ] },
+            { "text": "run 25000", "explain": "125 reduced time units of dynamics." }
+          ]
+        },
+        {
+          "id": "a6-s2", "kind": "OBSERVE", "title": "Run the dynamics", "anchor": "run",
+          "teach": "The system starts far from equilibrium: the minimized structure has no thermal motion at all, so the atoms accelerate down the potential gradients.",
+          "call_to_action": "Press the Run button.",
+          "expect": "potential energy falling while kinetic energy climbs, both levelling off"
+        },
+        {
+          "id": "a6-s3", "kind": "OBSERVE", "title": "Nobody chose that temperature", "anchor": "chart",
+          "teach": "Both energies plateau and the total fluctuates around a constant. That fluctuation, rather than a steady climb, is what a healthy NVE run looks like.\n\nThe temperature settles near 1.5. Nobody chose that: it is whatever the potential energy released happens to produce. Choosing it is what a thermostat is for.",
+          "call_to_action": "Switch the Charts window between etotal, pe and ke.",
+          "expect": "a flat total energy with pe and ke trading against each other",
+          "checkpoint": true
+        }
+      ]
+    },
+
+    {
+      "id": "act7",
+      "title": "Improving the script",
+      "steps": [
+        {
+          "id": "a7-s1", "kind": "OBSERVE", "title": "A second script", "anchor": "editor",
+          "open_file": "improved.min.lmp",
+          "teach": "That script built a system and equilibrated it, but it rebuilds everything from scratch every time you run it.\n\nThe rest of this tutorial works on two further files that came with the download. The first, now open, is the same script with an empty System definition section -- you are going to fill it differently.",
+          "call_to_action": "Read the sections that are already filled in."
+        },
+        {
+          "id": "a7-s2", "kind": "SHOW", "title": "Place the two species apart",
+          "teach": "Instead of mixing the species at random, put each in its own region: type 2 inside a cylinder, type 1 outside it. Watching them mix afterwards is far more informative than watching an already-mixed system stay mixed.",
+          "doc_link": "region", "anchor": "editor",
+          "commands": [
+            { "text": "region simbox block -20 20 -20 20 -20 20", "explain": "The same box as before.",
+              "concept": "region-vs-box" },
+            { "text": "create_box 2 simbox", "explain": "Two atom types again." },
+            { "text": "region cyl_in cylinder z 0 0 10 INF INF side in",
+              "explain": "The inside of a cylinder of radius 10, running the full height of the box along z.",
+              "notes": [
+                { "arg": 2, "note": "the cylinder axis",
+                  "alternatives": "`x` or `y` would orient it differently. The two INF values run it the full length of the box." },
+                { "arg": 8, "note": "which side of the surface counts as the region",
+                  "alternatives": "`side out` is the complement -- everything in the box that is *not* in the cylinder. The next line uses exactly that." } ] },
+            { "text": "region cyl_out cylinder z 0 0 10 INF INF side out",
+              "explain": "Everything outside the same cylinder." },
+            { "text": "create_atoms 1 random 1000 34134 cyl_out",
+              "explain": "1000 light atoms, placed only outside the cylinder." },
+            { "text": "create_atoms 2 random 150 12756 cyl_in",
+              "explain": "150 heavy atoms, placed only inside it." }
+          ]
+        },
+        {
+          "id": "a7-s3", "kind": "SHOW", "title": "Save the result",
+          "teach": "A sixth section, after the minimization. Writing the state to a data file means the next script can start from it rather than repeating the setup and the minimization.",
+          "doc_link": "write_data", "anchor": "editor",
+          "commands": [
+            { "text": "write_data improved.min.data",
+              "explain": "Write the box, the atoms, their types and positions, and the pair coefficients to a text file.",
+              "concept": "data-file",
+              "notes": [ { "arg": 1, "note": "the file to write",
+                "alternatives": "`write_restart` writes a binary file instead: smaller, faster, and it records the atom and pair styles too -- but it is not portable between LAMMPS versions or platforms, which is why a data file is used here.",
+                "concept": "data-file" } ] }
+          ]
+        },
+        {
+          "id": "a7-s4", "kind": "OBSERVE", "title": "Build and save", "anchor": "run",
+          "teach": "This run creates the file the next script reads.",
+          "call_to_action": "Press the Run button.",
+          "expect": "improved.min.data appearing beside your script",
+          "checkpoint": true
+        }
+      ]
+    },
+
+    {
+      "id": "act8",
+      "title": "Restarting, and measuring the mixing",
+      "steps": [
+        {
+          "id": "a8-s1", "kind": "OBSERVE", "title": "The third script", "anchor": "editor",
+          "open_file": "improved.md.lmp",
+          "teach": "This one holds only the Initialization section. Everything else comes from the data file you just wrote.\n\nOne ordering catch: `pair_style` must now come **before** the box exists, which means before `read_data`. The data file carries the coefficients but not the style.",
+          "call_to_action": "Read what is already there."
+        },
+        {
+          "id": "a8-s2", "kind": "SHOW", "title": "Read the saved system",
+          "teach": "Two lines replace the whole System definition and Settings sections of the first script.",
+          "doc_link": "read_data", "anchor": "editor",
+          "commands": [
+            { "text": "pair_style lj/cut 4.0", "explain": "The style must be set before the box is created.",
+              "concept": "lj-cutoff" },
+            { "text": "read_data improved.min.data",
+              "explain": "Rebuild the box, the atoms, the masses and the pair coefficients from the file.",
+              "concept": "data-file" }
+          ]
+        },
+        {
+          "id": "a8-s3", "kind": "SHOW", "title": "Clean up the misplaced atoms",
+          "teach": "Minimization moved some atoms across the cylinder wall, so the starting state is not quite clean. Rebuild the two regions -- regions are not saved in a data file -- then use groups to find the atoms on the wrong side and delete them.\n\nGroups are built from types, from regions, and from set operations on other groups. That composability is the point.",
+          "doc_link": "group", "anchor": "editor",
+          "commands": [
+            { "text": "region cyl_in cylinder z 0 0 10 INF INF side in",
+              "explain": "Regions are not stored in a data file, so they have to be defined again." },
+            { "text": "region cyl_out cylinder z 0 0 10 INF INF side out", "explain": "And the complement." },
+            { "text": "group grp_t1 type 1", "explain": "Every atom of type 1.",
+              "concept": "group-anatomy",
+              "notes": [ { "arg": 2, "note": "how the group is built",
+                "alternatives": "`region` selects by position, `id` by atom number, `union`/`intersect`/`subtract` combine existing groups.",
+                "concept": "group-anatomy" } ] },
+            { "text": "group grp_t2 type 2", "explain": "Every atom of type 2." },
+            { "text": "group grp_in region cyl_in", "explain": "Every atom currently inside the cylinder.",
+              "notes": [ { "arg": 2, "note": "membership is evaluated now, not continuously",
+                "alternatives": "The group keeps the atoms it matched when this line ran, even after they move. That is what makes the deletion below well defined." } ] },
+            { "text": "group grp_out region cyl_out", "explain": "Every atom currently outside it." },
+            { "text": "group grp_t1_in intersect grp_t1 grp_in", "explain": "Light atoms that drifted inside -- the ones that do not belong." },
+            { "text": "group grp_t2_out intersect grp_t2 grp_out", "explain": "Heavy atoms that drifted outside." },
+            { "text": "delete_atoms group grp_t1_in", "explain": "Remove them, leaving a clean starting arrangement." },
+            { "text": "delete_atoms group grp_t2_out", "explain": "And the same on the other side." }
+          ]
+        },
+        {
+          "id": "a8-s4", "kind": "SHOW", "title": "Measure the mixing",
+          "teach": "Now the interesting part: measure how the two species mix, rather than just watching them.\n\nTwo equal-style variables count the atoms of each type still inside the cylinder. Two computes measure the coordination number -- how many type 2 atoms sit near each type 1 atom -- and average it, which is a good scalar indicator of how mixed the system is.",
+          "doc_link": "compute", "anchor": "editor",
+          "commands": [
+            { "text": "variable n1_in equal count(grp_t1,cyl_in)",
+              "explain": "How many light atoms are inside the cylinder right now.",
+              "concept": "equal-variable",
+              "notes": [ { "arg": 2, "note": "the variable style",
+                "alternatives": "`equal` returns one number evaluated during the run. Other styles include `atom`, `index`, `loop`, `file` and `vector`.",
+                "concept": "equal-variable" } ] },
+            { "text": "variable n2_in equal count(grp_t2,cyl_in)", "explain": "And how many heavy atoms." },
+            { "text": "compute coor12 grp_t1 coord/atom cutoff 2 group grp_t2",
+              "explain": "For each type 1 atom, count the type 2 atoms within 2 length units.",
+              "concept": "compute-consumer",
+              "notes": [ { "arg": 3, "note": "the compute style",
+                "alternatives": "The suffix tells you what it produces: no suffix is global data, `/atom` per-atom, `/local` local, `/chunk` per-chunk. This one is per-atom, so something has to reduce it before it can be printed.",
+                "concept": "compute-consumer" } ] },
+            { "text": "compute sumcoor12 grp_t1 reduce ave c_coor12",
+              "explain": "Average that per-atom count over all type 1 atoms, giving a single number.",
+              "notes": [ { "arg": 4, "note": "referencing another compute",
+                "alternatives": "The `c_` prefix means \"the output of compute coor12\". Without a consumer like this, the first compute would never be evaluated at all.",
+                "concept": "compute-consumer" } ] }
+          ]
+        },
+        {
+          "id": "a8-s5", "kind": "SHOW", "title": "Run it, and print the measurements",
+          "teach": "Give the atoms an initial temperature, thermostat them, and report the two variables and the averaged coordination alongside the usual columns.",
+          "doc_link": "fix langevin", "anchor": "editor",
+          "commands": [
+            { "text": "thermo_style custom step temp etotal v_n1_in v_n2_in c_sumcoor12",
+              "explain": "The `v_` and `c_` prefixes pull in your variables and your compute.",
+              "concept": "thermo-output" },
+            { "text": "velocity all create 1.0 49284 mom yes dist gaussian",
+              "explain": "Start every atom moving, drawn from a Gaussian at temperature 1.0, with zero net momentum.",
+              "notes": [ { "arg": 4, "note": "remove the net momentum",
+                "alternatives": "Without `mom yes` the whole system can drift bodily across the box, which contributes to the temperature without meaning anything." } ] },
+            { "text": "fix mynve all nve", "explain": "Integrate the motion.", "concept": "fix-anatomy" },
+            { "text": "fix mylgv all langevin 1.0 1.0 0.1 10917 zero yes",
+              "explain": "Hold the temperature at 1.0 with friction and random kicks.",
+              "notes": [
+                { "arg": 4, "note": "temperature at the start of the run, then at the end",
+                  "alternatives": "Making them differ ramps the temperature over the run, which is how you heat or quench a system." },
+                { "arg": 6, "note": "the damping time",
+                  "alternatives": "Smaller values couple more strongly and disturb the dynamics more; larger ones equilibrate more slowly." },
+                { "arg": 8, "note": "keep the random forces from adding net momentum", "concept": "random-seed" } ] },
+            { "text": "timestep 0.005", "explain": "The same stable timestep as before.", "concept": "timestep-stability" },
+            { "text": "run 300000", "explain": "Long enough to watch the two species genuinely mix." }
+          ]
+        },
+        {
+          "id": "a8-s6", "kind": "OBSERVE", "title": "Watch them mix", "anchor": "run",
+          "teach": "This is the longest run in the tutorial. You are now measuring something, not just simulating it.",
+          "call_to_action": "Press the Run button.",
+          "expect": "n1_in rising and n2_in falling as the species interdiffuse"
+        },
+        {
+          "id": "a8-s7", "kind": "OBSERVE", "title": "The measurement, not the picture", "anchor": "chart",
+          "teach": "`n1_in` climbs as light atoms wander into the cylinder and `n2_in` falls as heavy ones leave. The averaged coordination number rises towards a plateau: that plateau is the mixed state.\n\nThis is the difference between watching a simulation and doing science with one. The picture is suggestive; the curve is evidence.",
+          "call_to_action": "Select each column in turn in the Charts window.",
+          "expect": "the coordination number rising and flattening as mixing completes",
+          "checkpoint": true
+        },
+        {
+          "id": "a8-s8", "kind": "OBSERVE", "title": "It is yours now", "anchor": "editor",
+          "teach": "Three things worth trying, all one number each:\n\n**Raise the timestep** to 0.05 and re-run. The total energy climbs without bound and the run may stop with **ERROR: Lost atoms** -- the integrator has stepped an atom through its neighbour's repulsive core. It almost never means atoms were really lost; it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nEvery run here is deliberately short enough to finish on a laptop, and none of them is long enough for statistically meaningful results.",
+          "call_to_action": "Change something and run it again."
         }
       ]
     }

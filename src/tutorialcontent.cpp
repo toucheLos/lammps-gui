@@ -38,16 +38,7 @@ struct KindName {
 };
 const KindName KIND_NAMES[] = {
     {"SHOW", StepKind::Show},
-    {"EXPERIMENT", StepKind::Experiment},
-};
-
-struct FigureName {
-    const char *name;
-    FigureSource source;
-};
-const FigureName FIGURE_NAMES[] = {
-    {"none", FigureSource::None},
-    {"snapshot", FigureSource::Snapshot},
+    {"OBSERVE", StepKind::Observe},
 };
 
 struct AnchorName {
@@ -57,15 +48,6 @@ struct AnchorName {
 const AnchorName ANCHOR_NAMES[] = {
     {"none", StepAnchor::None},   {"editor", StepAnchor::Editor}, {"run", StepAnchor::Run},
     {"chart", StepAnchor::Chart}, {"image", StepAnchor::Image},   {"log", StepAnchor::Log},
-};
-
-struct ParamKindName {
-    const char *name;
-    ParamKind kind;
-};
-const ParamKindName PARAM_NAMES[] = {
-    {"number", ParamKind::Number},
-    {"choice", ParamKind::Choice},
 };
 
 /// generic lookup over one of the name tables above
@@ -123,10 +105,7 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("title"),
     QStringLiteral("teach"),
     QStringLiteral("doc_link"),
-    QStringLiteral("figure"),
     QStringLiteral("commands"),
-    QStringLiteral("params"),
-    QStringLiteral("prediction"),
     QStringLiteral("expect"),
     QStringLiteral("run_after_insert"),
     QStringLiteral("checkpoint"),
@@ -134,7 +113,6 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("call_to_action"),
     QStringLiteral("open_file"),
 };
-const QSet<QString> FIGURE_KEYS  = {QStringLiteral("source"), QStringLiteral("caption")};
 const QSet<QString> COMMAND_KEYS = {
     QStringLiteral("text"),
     QStringLiteral("explain"),
@@ -147,24 +125,12 @@ const QSet<QString> NOTE_KEYS = {
     QStringLiteral("alternatives"),
     QStringLiteral("concept"),
 };
-const QSet<QString> PARAM_KEYS = {
-    QStringLiteral("id"),      QStringLiteral("label"), QStringLiteral("kind"),
-    QStringLiteral("command"), QStringLiteral("arg"),   QStringLiteral("min"),
-    QStringLiteral("max"),     QStringLiteral("step"),  QStringLiteral("initial"),
-    QStringLiteral("choices"), QStringLiteral("unit"),  QStringLiteral("explain"),
-};
-const QSet<QString> PREDICTION_KEYS = {
-    QStringLiteral("question"),
-    QStringLiteral("options"),
-    QStringLiteral("correct_option"),
-};
-const QSet<QString> OPTION_KEYS = {QStringLiteral("text"), QStringLiteral("feedback")};
 
 /**
  * @brief Issue collector that knows where in the document it is
  *
  * Threading a path prefix through the parse is what turns "invalid content"
- * into "acts[1].steps[3].params[0].command is missing", which is the whole
+ * into "acts[1].steps[3].commands[0].text is not a string", which is the whole
  * point of validating an authored file.
  */
 class Ctx {
@@ -333,14 +299,6 @@ bool readObjectArray(const QJsonObject &obj, const QString &key, const QString &
 
 // ---- section parsers -----------------------------------------------------
 
-/// the first word of a command line, used to bind a parameter to a command
-QString commandWordOf(const QString &line)
-{
-    const QString trimmed = line.trimmed();
-    const int space       = trimmed.indexOf(QRegularExpression(QStringLiteral("\\s")));
-    return space < 0 ? trimmed : trimmed.left(space);
-}
-
 CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
                          QSet<QString> &usedConcepts)
 {
@@ -376,107 +334,6 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
         cmd.notes.append(note);
     }
     return cmd;
-}
-
-TutorialParam parseParam(const QJsonObject &obj, const QString &path, Ctx &ctx)
-{
-    TutorialParam param;
-    ctx.checkKeys(obj, PARAM_KEYS, path);
-
-    readString(obj, QStringLiteral("id"), path, ctx, param.id, true);
-    readString(obj, QStringLiteral("label"), path, ctx, param.label, true);
-    readString(obj, QStringLiteral("command"), path, ctx, param.command, true);
-    readString(obj, QStringLiteral("unit"), path, ctx, param.unit);
-    readString(obj, QStringLiteral("explain"), path, ctx, param.explain);
-    readInt(obj, QStringLiteral("arg"), path, ctx, param.argIndex);
-
-    QString kindstr;
-    if (readString(obj, QStringLiteral("kind"), path, ctx, kindstr))
-        if (!lookupName(PARAM_NAMES, kindstr, &ParamKindName::kind, param.kind))
-            ctx.error(sub(path, QStringLiteral("kind")),
-                      QStringLiteral("unknown parameter kind \"%1\"; expected one of: %2")
-                          .arg(kindstr, acceptedNames(PARAM_NAMES)));
-
-    if (param.argIndex < 1)
-        ctx.error(sub(path, QStringLiteral("arg")),
-                  QStringLiteral("a parameter rewrites an argument, so arg must be 1 or higher"));
-
-    switch (param.kind) {
-        case ParamKind::Number: {
-            const bool hasmin = readDouble(obj, QStringLiteral("min"), path, ctx, param.min);
-            const bool hasmax = readDouble(obj, QStringLiteral("max"), path, ctx, param.max);
-            readDouble(obj, QStringLiteral("step"), path, ctx, param.step);
-            const bool hasinit =
-                readDouble(obj, QStringLiteral("initial"), path, ctx, param.initial);
-            if (!hasmin || !hasmax) {
-                ctx.error(path, QStringLiteral("a number parameter needs both \"min\" and "
-                                               "\"max\""));
-            } else if (param.min >= param.max) {
-                ctx.error(sub(path, QStringLiteral("min")),
-                          QStringLiteral("min (%1) must be below max (%2)")
-                              .arg(param.min)
-                              .arg(param.max));
-            } else if (hasinit && (param.initial < param.min || param.initial > param.max)) {
-                ctx.error(sub(path, QStringLiteral("initial")),
-                          QStringLiteral("initial (%1) lies outside [%2, %3]")
-                              .arg(param.initial)
-                              .arg(param.min)
-                              .arg(param.max));
-            }
-            if (param.step <= 0.0) param.step = (param.max - param.min) / 100.0;
-            if (!hasinit) param.initial = param.min;
-            break;
-        }
-        case ParamKind::Choice:
-            readStringList(obj, QStringLiteral("choices"), path, ctx, param.choices);
-            readString(obj, QStringLiteral("initial"), path, ctx, param.initialChoice);
-            if (param.choices.size() < 2)
-                ctx.error(sub(path, QStringLiteral("choices")),
-                          QStringLiteral("a choice parameter needs at least two options"));
-            else if (param.initialChoice.isEmpty())
-                param.initialChoice = param.choices.first();
-            else if (!param.choices.contains(param.initialChoice))
-                ctx.error(sub(path, QStringLiteral("initial")),
-                          QStringLiteral("\"%1\" is not one of the offered choices")
-                              .arg(param.initialChoice));
-            break;
-    }
-    return param;
-}
-
-TutorialPrediction parsePrediction(const QJsonObject &obj, const QString &path, Ctx &ctx)
-{
-    TutorialPrediction pred;
-    pred.present = true;
-    ctx.checkKeys(obj, PREDICTION_KEYS, path);
-
-    readString(obj, QStringLiteral("question"), path, ctx, pred.question, true);
-    pred.correctOption = -1;
-    readInt(obj, QStringLiteral("correct_option"), path, ctx, pred.correctOption);
-
-    QList<QJsonObject> options;
-    QStringList optpaths;
-    readObjectArray(obj, QStringLiteral("options"), path, ctx, options, optpaths);
-    for (int i = 0; i < options.size(); ++i) {
-        ctx.checkKeys(options.at(i), OPTION_KEYS, optpaths.at(i));
-        TutorialOption opt;
-        readString(options.at(i), QStringLiteral("text"), optpaths.at(i), ctx, opt.text, true);
-        readString(options.at(i), QStringLiteral("feedback"), optpaths.at(i), ctx, opt.feedback);
-        if (opt.feedback.isEmpty())
-            ctx.warn(optpaths.at(i), QStringLiteral("this option teaches nothing; every answer "
-                                                    "should explain itself"));
-        pred.options.append(opt);
-    }
-
-    if (pred.options.size() < 2)
-        ctx.error(sub(path, QStringLiteral("options")),
-                  QStringLiteral("a prediction needs at least two options"));
-    else if (pred.correctOption < 0 || pred.correctOption >= pred.options.size())
-        ctx.error(sub(path, QStringLiteral("correct_option")),
-                  QStringLiteral("correct_option %1 is out of range for %2 options")
-                      .arg(pred.correctOption)
-                      .arg(pred.options.size()));
-    return pred;
 }
 
 TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
@@ -523,60 +380,34 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
         }
     }
 
-    QJsonObject figobj;
-    if (readObject(obj, QStringLiteral("figure"), path, ctx, figobj)) {
-        const QString figpath = sub(path, QStringLiteral("figure"));
-        ctx.checkKeys(figobj, FIGURE_KEYS, figpath);
-        QString src;
-        if (readString(figobj, QStringLiteral("source"), figpath, ctx, src, true))
-            if (!lookupName(FIGURE_NAMES, src, &FigureName::source, step.figure))
-                ctx.error(sub(figpath, QStringLiteral("source")),
-                          QStringLiteral("unknown figure source \"%1\"; expected one of: %2")
-                              .arg(src, acceptedNames(FIGURE_NAMES)));
-        readString(figobj, QStringLiteral("caption"), figpath, ctx, step.figureCaption);
-    }
-
     QList<QJsonObject> cmds;
     QStringList cmdpaths;
     readObjectArray(obj, QStringLiteral("commands"), path, ctx, cmds, cmdpaths);
     for (int i = 0; i < cmds.size(); ++i)
         step.commands.append(parseCommand(cmds.at(i), cmdpaths.at(i), ctx, usedConcepts));
 
-    QList<QJsonObject> params;
-    QStringList parampaths;
-    readObjectArray(obj, QStringLiteral("params"), path, ctx, params, parampaths);
-    for (int i = 0; i < params.size(); ++i)
-        step.params.append(parseParam(params.at(i), parampaths.at(i), ctx));
-
-    QJsonObject predobj;
-    if (readObject(obj, QStringLiteral("prediction"), path, ctx, predobj))
-        step.prediction = parsePrediction(predobj, sub(path, QStringLiteral("prediction")), ctx);
-
     // ---- cross-checks the schema alone cannot express ----
     switch (step.kind) {
         case StepKind::Show:
-            if (step.commands.isEmpty() && step.teach.isEmpty())
-                ctx.error(path, QStringLiteral("a SHOW step needs either commands to show or "
-                                               "teach text; this one presents nothing"));
-            if (!step.params.isEmpty())
-                ctx.warn(sub(path, QStringLiteral("params")),
-                         QStringLiteral("parameters belong to an EXPERIMENT step and are "
-                                        "ignored here"));
-            if (step.prediction.present)
-                ctx.warn(sub(path, QStringLiteral("prediction")),
-                         QStringLiteral("a prediction belongs immediately before a run, so it "
-                                        "is ignored on a SHOW step"));
+            if (step.commands.isEmpty())
+                ctx.error(sub(path, QStringLiteral("commands")),
+                          QStringLiteral("a SHOW step exists to offer commands; use OBSERVE "
+                                         "for a step that only explains something"));
             break;
 
-        case StepKind::Experiment:
-            if (step.params.isEmpty())
-                ctx.error(sub(path, QStringLiteral("params")),
-                          QStringLiteral("an EXPERIMENT step needs at least one parameter to "
-                                         "change; otherwise it is just a run"));
-            if (step.expect.isEmpty())
-                ctx.warn(sub(path, QStringLiteral("expect")),
-                         QStringLiteral("no \"expect\" text; the user is told to run but not "
-                                        "what to look for"));
+        case StepKind::Observe:
+            if (!step.commands.isEmpty())
+                ctx.error(sub(path, QStringLiteral("commands")),
+                          QStringLiteral("an OBSERVE step points at something rather than "
+                                         "writing to the script; use SHOW to offer commands"));
+            if (step.anchor == StepAnchor::None)
+                ctx.error(sub(path, QStringLiteral("anchor")),
+                          QStringLiteral("an OBSERVE step needs an anchor; without one it "
+                                         "points at nothing"));
+            if (step.callToAction.isEmpty() && step.anchor == StepAnchor::Run)
+                ctx.warn(sub(path, QStringLiteral("call_to_action")),
+                         QStringLiteral("a step pointing at the Run button should say to "
+                                        "press it"));
             break;
     }
 
@@ -782,19 +613,17 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
         }
     }
 
-    // a parameter must rewrite a command the tutorial has actually shown by
-    // then, or the run silently changes nothing
-    QSet<QString> shownCommands;
+    // a step that hands the user the Run button has to come after something has
+    // been put in the script, or they would be running an empty buffer
+    int commandsSoFar = 0;
     for (const auto &act : out.actlist) {
         for (const auto &step : act.steps) {
-            for (const auto &cmd : step.commands)
-                shownCommands.insert(commandWordOf(cmd.text));
-            for (const auto &param : step.params)
-                if (!param.command.isEmpty() && !shownCommands.contains(param.command))
-                    ctx.error(QStringLiteral("acts"),
-                              QStringLiteral("step \"%1\" binds a parameter to \"%2\", which no "
-                                             "earlier step puts in the script")
-                                  .arg(step.id, param.command));
+            if (step.anchor == StepAnchor::Run && commandsSoFar == 0)
+                ctx.error(QStringLiteral("acts"),
+                          QStringLiteral("step \"%1\" points at the Run button, but no earlier "
+                                         "step has put anything in the script")
+                              .arg(step.id));
+            commandsSoFar += static_cast<int>(step.commands.size());
         }
     }
 

@@ -172,7 +172,7 @@ inline const QString VIEW_FILE_MENU = QStringLiteral("viewFileMenu");
 /// Schema version of the tutorial content files this build can read.  Bump it
 /// only when an existing key changes *meaning*: purely additive keys are
 /// tolerated by the loader as warnings, so adding one does not need a bump.
-constexpr int TUTORIAL_SCHEMA_VERSION = 2;
+constexpr int TUTORIAL_SCHEMA_VERSION = 3;
 /// How many times a tutorial concept is explained in full before its
 /// explanation collapses to something the user can expand on demand.  The
 /// count is kept per user and shared across tutorials, so an idea learned once
