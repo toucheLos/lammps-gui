@@ -537,26 +537,39 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     // the tour points at real parts of the window, and resolves them freshly
     // every step: the snapshot viewer in particular is destroyed and rebuilt on
     // every render, so a cached pointer would dangle
-    tutorialview->setAnchorResolver([this](StepAnchor anchor) -> QWidget * {
+    tutorialview->setAnchorResolver([this](StepAnchor anchor) -> QRect {
+        // a rectangle in the main window's coordinates.  Resolved freshly every
+        // step: the snapshot viewer is destroyed and rebuilt on every render, so
+        // a cached pointer would dangle.
+        const auto areaOf = [this](QWidget *w) -> QRect {
+            if (!w || !w->isVisible()) return {};
+            return {w->mapTo(this, QPoint(0, 0)), w->size()};
+        };
         switch (anchor) {
             case StepAnchor::Editor:
-                return textEdit;
+                // the line being written, not the whole editor: ringing the
+                // entire central widget lights up the window and points at
+                // nothing in particular
+                return textEdit->pendingLineArea().translated(
+                    textEdit->viewport()->mapTo(this, QPoint(0, 0)));
             case StepAnchor::Run:
-                return statusbar ? statusbar->findChild<QWidget *>(Cfg::RUN_BUTTON_NAME) : nullptr;
+                return areaOf(statusbar ? statusbar->findChild<QWidget *>(Cfg::RUN_BUTTON_NAME)
+                                        : nullptr);
             case StepAnchor::Chart:
-                return viewlayout ? viewlayout->view(ViewSlot::Chart) : nullptr;
+                return areaOf(viewlayout ? viewlayout->view(ViewSlot::Chart) : nullptr);
             case StepAnchor::Image:
-                return viewlayout ? viewlayout->view(ViewSlot::Image) : nullptr;
+                return areaOf(viewlayout ? viewlayout->view(ViewSlot::Image) : nullptr);
             case StepAnchor::Log:
-                return viewlayout ? viewlayout->view(ViewSlot::Log) : nullptr;
+                return areaOf(viewlayout ? viewlayout->view(ViewSlot::Log) : nullptr);
             case StepAnchor::None:
                 break;
         }
-        return nullptr;
+        return {};
     });
 
     // the script grows as the tour goes, so the user finishes holding an input
     // file they built themselves rather than a transcript
+    connect(tutorialview, &TutorialView::seedSkeleton, textEdit, &CodeEditor::seedSkeleton);
     connect(tutorialview, &TutorialView::offerCommand, textEdit, &CodeEditor::setPendingLine);
     connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
     connect(tutorialview, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);
@@ -601,21 +614,15 @@ void LammpsGui::applyTutorialParameter(const QString &command, int argIndex, con
     textEdit->setHighlight(lineNumber, false);
 }
 
-void LammpsGui::appendTutorialCommand(const QString &text)
+void LammpsGui::appendTutorialCommand(const QString &text, const QString &section)
 {
     if (text.trimmed().isEmpty()) return;
 
-    // append through the editor's own cursor rather than rewriting the buffer,
-    // so undo history and the user's own edits are left intact
-    auto cursor = textEdit->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    if (!textEdit->document()->isEmpty() &&
-        !textEdit->document()->lastBlock().text().trimmed().isEmpty())
-        cursor.insertText(QStringLiteral("\n"));
-    cursor.insertText(text);
-    textEdit->setTextCursor(cursor);
-    // mark the line the tutorial just contributed
-    textEdit->setHighlight(textEdit->document()->blockCount() - 1, false);
+    // reuse the pending-line machinery so the command lands under its own
+    // section heading, then accept it immediately: this path is for lines the
+    // user chose to skip past rather than type
+    textEdit->setPendingLine(text, section);
+    textEdit->commitPendingLine();
 }
 
 void LammpsGui::createAboutMenu()

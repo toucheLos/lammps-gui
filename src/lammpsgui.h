@@ -635,7 +635,7 @@ private:
      * @brief Append a command accepted by the tutorial to the editor
      * @param text the accepted command line
      */
-    void appendTutorialCommand(const QString &text);
+    void appendTutorialCommand(const QString &text, const QString &section);
 
     /**
      * @brief Rewrite one argument of a command in the editor buffer

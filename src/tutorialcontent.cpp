@@ -81,8 +81,9 @@ const QSet<QString> ROOT_KEYS = {
     QStringLiteral("schema_version"), QStringLiteral("id"),
     QStringLiteral("title"),          QStringLiteral("collection"),
     QStringLiteral("tutorial"),       QStringLiteral("requires_packages"),
-    QStringLiteral("skeleton_file"),  QStringLiteral("attribution"),
-    QStringLiteral("concepts"),       QStringLiteral("acts"),
+    QStringLiteral("skeleton_file"),  QStringLiteral("skeleton"),
+    QStringLiteral("attribution"),    QStringLiteral("concepts"),
+    QStringLiteral("acts"),
 };
 const QSet<QString> ATTRIBUTION_KEYS = {
     QStringLiteral("source"),
@@ -100,24 +101,15 @@ const QSet<QString> ACT_KEYS = {
     QStringLiteral("steps"),
 };
 const QSet<QString> STEP_KEYS = {
-    QStringLiteral("id"),
-    QStringLiteral("kind"),
-    QStringLiteral("title"),
-    QStringLiteral("teach"),
-    QStringLiteral("doc_link"),
-    QStringLiteral("commands"),
-    QStringLiteral("expect"),
-    QStringLiteral("run_after_insert"),
-    QStringLiteral("checkpoint"),
-    QStringLiteral("anchor"),
-    QStringLiteral("call_to_action"),
+    QStringLiteral("id"),         QStringLiteral("kind"),     QStringLiteral("title"),
+    QStringLiteral("teach"),      QStringLiteral("doc_link"), QStringLiteral("commands"),
+    QStringLiteral("section"),    QStringLiteral("expect"),   QStringLiteral("run_after_insert"),
+    QStringLiteral("checkpoint"), QStringLiteral("anchor"),   QStringLiteral("call_to_action"),
     QStringLiteral("open_file"),
 };
 const QSet<QString> COMMAND_KEYS = {
-    QStringLiteral("text"),
-    QStringLiteral("explain"),
-    QStringLiteral("notes"),
-    QStringLiteral("concept"),
+    QStringLiteral("text"),    QStringLiteral("explain"), QStringLiteral("notes"),
+    QStringLiteral("concept"), QStringLiteral("typed"),
 };
 const QSet<QString> NOTE_KEYS = {
     QStringLiteral("arg"),
@@ -307,8 +299,16 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
 
     readString(obj, QStringLiteral("text"), path, ctx, cmd.text, true);
     readString(obj, QStringLiteral("explain"), path, ctx, cmd.explain);
+    readBool(obj, QStringLiteral("typed"), path, ctx, cmd.typed);
     if (readString(obj, QStringLiteral("concept"), path, ctx, cmd.conceptId))
         usedConcepts.insert(cmd.conceptId);
+
+    // a typed line is described rather than shown, so the description is the
+    // only thing the user has to go on
+    if (cmd.typed && cmd.explain.isEmpty())
+        ctx.error(sub(path, QStringLiteral("explain")),
+                  QStringLiteral("a typed command is never shown, so it needs an explanation "
+                                 "the user can work from"));
 
     if (cmd.text.contains(QLatin1Char('\n')))
         ctx.error(sub(path, QStringLiteral("text")),
@@ -350,6 +350,7 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readBool(obj, QStringLiteral("run_after_insert"), path, ctx, step.runAfterInsert);
     readString(obj, QStringLiteral("call_to_action"), path, ctx, step.callToAction);
     readString(obj, QStringLiteral("open_file"), path, ctx, step.openFile);
+    readString(obj, QStringLiteral("section"), path, ctx, step.section);
 
     QString anchorstr;
     if (readString(obj, QStringLiteral("anchor"), path, ctx, anchorstr))
@@ -528,6 +529,7 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
     readString(root, QStringLiteral("skeleton_file"), QString(), ctx, out.skeleton);
     readInt(root, QStringLiteral("tutorial"), QString(), ctx, out.tutno);
     readStringList(root, QStringLiteral("requires_packages"), QString(), ctx, out.packages);
+    readStringList(root, QStringLiteral("skeleton"), QString(), ctx, out.skeletonlines);
 
     QJsonObject attrib;
     if (readObject(root, QStringLiteral("attribution"), QString(), ctx, attrib)) {
@@ -612,6 +614,16 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
             seensteps.insert(step.id);
         }
     }
+
+    // a step filing commands under a heading the skeleton never declares would
+    // silently append them at the end instead
+    for (const auto &act : out.actlist)
+        for (const auto &step : act.steps)
+            if (!step.section.isEmpty() && !out.skeletonlines.contains(step.section))
+                ctx.error(QStringLiteral("acts"),
+                          QStringLiteral("step \"%1\" files its commands under \"%2\", which "
+                                         "is not one of the skeleton's headings")
+                              .arg(step.id, step.section));
 
     // a step that hands the user the Run button has to come after something has
     // been put in the script, or they would be running an empty buffer

@@ -173,6 +173,13 @@ public:
     /** @brief Enable or disable the Next button */
     void setNextEnabled(bool enable);
 
+    /**
+     * @brief Show a short response to what the user just did
+     * @param text the response; empty clears it
+     * @param ok true to colour it as accepted, false as not-yet
+     */
+    void setFeedback(const QString &text, bool ok);
+
     /** @brief Which side of the target the bubble is drawn on */
     void setSide(Side side);
 
@@ -194,6 +201,7 @@ private:
     QLabel *titleLabel      = nullptr; ///< step heading
     QTextBrowser *bodyText  = nullptr; ///< the teach text
     QLabel *actionLabel     = nullptr; ///< what to do now
+    QLabel *feedbackLabel   = nullptr; ///< response to a typed answer
     QLabel *progressLabel   = nullptr; ///< "step 4 of 21"
     QPushButton *backButton = nullptr; ///< step backwards
     QPushButton *nextButton = nullptr; ///< step forwards

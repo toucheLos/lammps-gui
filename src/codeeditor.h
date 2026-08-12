@@ -111,12 +111,14 @@ public:
      * @brief Offer a line to the user without committing it
      * @param text the command an interactive tutorial is proposing
      *
-     * The line is appended to the buffer and painted in the tutorial's
-     * highlight color to mark it as not yet accepted.  Pressing Tab with the
+     * The line is written into the buffer and painted in the tutorial's
+     * highlight color to mark it as not yet accepted.  Passing empty text
+     * offers a *blank* line instead, which is how a tutorial asks the user to
+     * write the command themselves rather than handing it over.  Pressing Tab with the
      * cursor on it commits it; clearPendingLine() withdraws it again.  Only
      * one line can be pending at a time; offering a second withdraws the first.
      */
-    void setPendingLine(const QString &text);
+    void setPendingLine(const QString &text, const QString &section = QString());
 
     /**
      * @brief Accept the pending line, leaving it in the buffer
@@ -130,9 +132,32 @@ public:
     /** @brief True while a line is offered but not yet accepted */
     bool hasPendingLine() const { return pendingLine >= 0; }
 
+    /**
+     * @brief Write a set of section headings into an empty buffer
+     * @param lines the headings, in order
+     *
+     * Does nothing unless the buffer is empty, so it can never overwrite work.
+     */
+    void seedSkeleton(const QStringList &lines);
+
+    /**
+     * @brief Area of the line an interactive tutorial is pointing at
+     * @return the rectangle in viewport coordinates, empty when nothing is
+     *         pending or the line is scrolled out of view
+     *
+     * Used to ring exactly that line rather than the whole editor.  Falls back
+     * to the line the cursor is on when nothing is pending, so a step that
+     * talks about the script still points somewhere useful.
+     */
+    QRect pendingLineArea() const;
+
 signals:
-    /** @brief The user accepted the pending line with Tab */
-    void pendingLineCommitted();
+    /**
+     * @brief The user accepted the pending line with Tab
+     * @param text the line as it stands, which for a line they typed
+     *        themselves is what they actually wrote
+     */
+    void pendingLineCommitted(const QString &text);
 
 public:
     /**

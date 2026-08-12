@@ -13,6 +13,7 @@
 
 #include "constants.h"
 #include "tutorialengine.h"
+#include "tutorialtext.h"
 
 #include <QRegularExpression>
 #include <QWidget>
@@ -21,7 +22,10 @@ TutorialView::TutorialView(TutorialEngine *engine, QWidget *host) :
     QObject(host), engine(engine), host(host)
 {
     spotlight = new TutorialSpotlight(host);
-    coach     = new TutorialCoach(spotlight);
+    // a sibling, not a child: TutorialSpotlight is transparent for mouse events,
+    // and that makes its whole subtree un-hittable -- a callout parented to it
+    // would look right and be completely unclickable
+    coach = new TutorialCoach(host);
 
     connect(coach, &TutorialCoach::nextRequested, this, &TutorialView::goNext);
     connect(coach, &TutorialCoach::backRequested, this, &TutorialView::goBack);
@@ -30,21 +34,28 @@ TutorialView::TutorialView(TutorialEngine *engine, QWidget *host) :
 
 TutorialView::~TutorialView()
 {
-    // the widgets are children of the host, so Qt would eventually delete them,
-    // but the coach mark has to disappear the moment the tour ends
+    // both are children of the host, so Qt would eventually delete them, but
+    // the coach mark has to disappear the moment the tour ends
     delete spotlight;
+    delete coach;
 }
 
-void TutorialView::setAnchorResolver(std::function<QWidget *(StepAnchor)> resolver)
+void TutorialView::setAnchorResolver(std::function<QRect(StepAnchor)> resolver)
 {
     resolve = std::move(resolver);
 }
 
 void TutorialView::start()
 {
+    // the script starts as a set of empty headings, so the shape of an input
+    // file is visible before any of it is filled in
+    emit seedSkeleton(engine->content().skeletonLines());
+
     spotlight->setGeometry(host->rect());
     spotlight->show();
     spotlight->raise();
+    coach->show();
+    coach->raise();
     showCurrentStep();
 }
 
@@ -80,15 +91,9 @@ void TutorialView::reposition()
     if (!spotlight || !coach) return;
     spotlight->setGeometry(host->rect());
 
-    QWidget *target = resolve ? resolve(currentAnchor()) : nullptr;
-    QRect targetRect;
-    if (target && target->isVisible()) {
-        // into the spotlight's coordinates, which match the host's
-        targetRect = QRect(target->mapTo(host, QPoint(0, 0)), target->size());
-        // clip to what is actually on screen, so an anchor inside a scrolled or
-        // partly hidden view still produces a sane ring
-        targetRect = targetRect.intersected(host->rect());
-    }
+    // clipped to the window, so an anchor in a scrolled or partly hidden view
+    // still produces a sane ring
+    QRect targetRect = resolve ? resolve(currentAnchor()).intersected(host->rect()) : QRect();
     spotlight->setTarget(targetRect);
 
     const int width  = qMin(Cfg::COACH_WIDTH, host->width() - 2 * Cfg::COACH_GAP);
@@ -165,20 +170,66 @@ void TutorialView::showCurrentStep()
     // a step with commands hands them to the editor one at a time; the callout
     // itself never shows code, it only says what to do with it
     if (const CommandLine *cmd = engine->nextCommand()) {
-        emit offerCommand(cmd->text);
-        coach->setCallToAction(QStringLiteral("Press Tab in the editor to accept this line."));
+        if (cmd->typed) {
+            // reinforcement: the line is described but never written, so the
+            // user has to produce it themselves.  An empty pending line marks
+            // where it goes and gives Tab something to check.
+            emit offerCommand(QString(), step->section);
+            coach->setCallToAction(
+                QStringLiteral("Type it yourself on the highlighted line, then press Tab."));
+        } else {
+            emit offerCommand(cmd->text, step->section);
+            coach->setCallToAction(QStringLiteral("Press Tab in the editor to accept this line."));
+        }
     } else {
         coach->setCallToAction(step->callToAction);
     }
+    coach->setFeedback(QString(), true);
 
     reposition();
 }
 
-void TutorialView::commandCommitted()
+void TutorialView::commandCommitted(const QString &written)
 {
+    const CommandLine *cmd = engine->nextCommand();
+    if (cmd && cmd->typed) {
+        // compare word by word after canonicalization, so spacing, letter case
+        // and a trailing comment do not decide whether the answer is right
+        const QStringList got  = canonicalWords(written);
+        const QStringList want = canonicalWords(cmd->text);
+        if (got != want) {
+            QString why = QStringLiteral("Not quite -- try again.");
+            if (got.size() != want.size())
+                why = QStringLiteral("That has %1 words; the command takes %2.")
+                          .arg(got.size())
+                          .arg(want.size());
+            else
+                for (int i = 0; i < got.size(); ++i)
+                    if (got.at(i).compare(want.at(i), Qt::CaseInsensitive) != 0) {
+                        why = QStringLiteral("Word %1 should not be \"%2\".")
+                                  .arg(i + 1)
+                                  .arg(got.at(i));
+                        break;
+                    }
+            coach->setFeedback(why, false);
+            // leave the line pending so they can correct it in place
+            emit offerCommand(QString(), engine->currentStep()->section);
+            return;
+        }
+        coach->setFeedback(QStringLiteral("That is it."), true);
+    }
+
     engine->takeNextCommand();
-    // offers the next line of the same step, or moves on to what the step
-    // wants the user to look at once the script is complete
+    // accepting the last line of a step finishes it: waiting for a separate
+    // Next press there just looks like nothing happened
+    if (engine->allCommandsInserted() && !engine->currentStep()->expect.isEmpty()) {
+        showCurrentStep();
+        return;
+    }
+    if (engine->allCommandsInserted()) {
+        engine->next();
+        return;
+    }
     showCurrentStep();
 }
 
@@ -195,15 +246,14 @@ void TutorialView::goNext()
 {
     // an offered but unaccepted line is withdrawn rather than left behind
     emit withdrawCommand();
-    if (engine->nextCommand()) {
-        // the user chose to move on rather than accept each line: the remaining
-        // lines still have to reach the script, or the next run would not work
-        while (const CommandLine *cmd = engine->nextCommand()) {
-            emit insertCommand(cmd->text);
-            engine->takeNextCommand();
-        }
-        showCurrentStep();
-        return;
+
+    // the user chose to move on rather than accept each line by hand: the
+    // remaining lines still have to reach the script, or the next run would not
+    // work.  Then advance -- staying on the step is indistinguishable from the
+    // button being broken.
+    while (const CommandLine *cmd = engine->nextCommand()) {
+        emit insertCommand(cmd->text, engine->currentStep()->section);
+        engine->takeNextCommand();
     }
     engine->next();
 }

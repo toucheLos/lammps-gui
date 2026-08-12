@@ -106,6 +106,10 @@ struct CommandLine {
     QString explain;        ///< what this line does
     QList<TokenNote> notes; ///< per-argument annotations
     QString conceptId;      ///< concept this whole line teaches, if any
+    /// make the user type this one instead of accepting it.  Used sparingly,
+    /// for reinforcement: the line is not written into the editor, the callout
+    /// describes it instead, and what the user types is compared word by word.
+    bool typed = false;
 };
 
 /**
@@ -119,6 +123,9 @@ struct TutorialStep {
     QString docCommand;             ///< command name for the documentation link
     QString docStyle;               ///< optional style refining the documentation link
 
+    /// comment line this step's commands belong under, e.g. "# 2) System
+    /// definition"; empty appends at the end of the buffer
+    QString section;
     QList<CommandLine> commands; ///< the lines to present and insert
     /// what the user should see once they act; shown after the run rather than
     /// before it, so it reads as an observation and not as an instruction
@@ -188,6 +195,14 @@ public:
     const QStringList &requiredPackages() const { return packages; }
     /** @brief File name of the stripped skeleton opened when the tutorial starts */
     const QString &skeletonFile() const { return skeleton; }
+    /**
+     * @brief The empty section headings the script starts from
+     *
+     * Written into the editor when a tutorial begins on an empty buffer, so the
+     * user sees the shape of an input script before any of it is filled in, and
+     * each command can then be filed under its own heading.
+     */
+    const QStringList &skeletonLines() const { return skeletonlines; }
     /** @brief Provenance of the tutorial's material */
     const TutorialAttribution &attribution() const { return credits; }
     /** @brief The acts in presentation order */
@@ -237,6 +252,7 @@ private:
     int tutno = 0;                              ///< 1-based tutorial number in the collection
     QStringList packages;                       ///< required LAMMPS packages
     QString skeleton;                           ///< stripped skeleton file name
+    QStringList skeletonlines;                  ///< section headings the script starts from
     TutorialAttribution credits;                ///< provenance
     QList<TutorialAct> actlist;                 ///< the acts
     QHash<QString, TutorialConcept> conceptmap; ///< declared concepts by id

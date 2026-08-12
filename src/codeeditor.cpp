@@ -187,12 +187,50 @@ void CodeEditor::setHighlight(int block, bool error)
 // An interactive tutorial offers a command by putting it in the buffer and
 // marking it; the user accepts it with Tab or moves on and it is withdrawn.
 
-void CodeEditor::setPendingLine(const QString &text)
+void CodeEditor::seedSkeleton(const QStringList &lines)
+{
+    // never overwrite work: a buffer with anything in it is the user's
+    if (lines.isEmpty() || !document()->isEmpty()) return;
+    setPlainText(lines.join(QLatin1Char('\n')));
+}
+
+void CodeEditor::setPendingLine(const QString &text, const QString &section)
 {
     clearPendingLine();
-    if (text.trimmed().isEmpty()) return;
+    // an empty text is not a mistake: it offers a *blank* pending line for the
+    // user to type into, which is how a tutorial asks for a command rather than
+    // handing it over
 
-    auto cursor = textCursor();
+    auto cursor     = textCursor();
+    int insertAfter = -1;
+    if (!section.isEmpty()) {
+        // file the line under its own heading, and after anything already
+        // filed there, so a script grows section by section rather than as one
+        // long append
+        for (QTextBlock b = document()->begin(); b.isValid(); b = b.next()) {
+            if (b.text().trimmed() == section.trimmed()) {
+                insertAfter = b.blockNumber();
+                for (QTextBlock n = b.next(); n.isValid(); n = n.next()) {
+                    if (n.text().trimmed().startsWith(QLatin1Char('#'))) break;
+                    if (n.text().trimmed().isEmpty()) continue;
+                    insertAfter = n.blockNumber();
+                }
+                break;
+            }
+        }
+    }
+
+    if (insertAfter >= 0) {
+        cursor = QTextCursor(document()->findBlockByNumber(insertAfter));
+        cursor.movePosition(QTextCursor::EndOfBlock);
+        cursor.insertText(QStringLiteral("\n") + text);
+        pendingLine = insertAfter + 1;
+        setTextCursor(cursor);
+        ensureCursorVisible();
+        viewport()->update();
+        return;
+    }
+
     cursor.movePosition(QTextCursor::End);
     if (!document()->isEmpty() && !document()->lastBlock().text().trimmed().isEmpty())
         cursor.insertText(QStringLiteral("\n"));
@@ -204,6 +242,19 @@ void CodeEditor::setPendingLine(const QString &text)
     viewport()->update();
 }
 
+QRect CodeEditor::pendingLineArea() const
+{
+    const int target       = pendingLine >= 0 ? pendingLine : textCursor().blockNumber();
+    const QTextBlock block = document()->findBlockByNumber(target);
+    if (!block.isValid() || !block.isVisible()) return {};
+
+    const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
+    const QRect area(0, static_cast<int>(geom.top()), viewport()->width(),
+                     static_cast<int>(geom.height()));
+    // a line scrolled out of view has nothing worth ringing
+    return area.intersected(viewport()->rect());
+}
+
 QString CodeEditor::commitPendingLine()
 {
     if (pendingLine < 0) return {};
@@ -211,7 +262,7 @@ QString CodeEditor::commitPendingLine()
     const QString text     = block.isValid() ? block.text() : QString();
     pendingLine            = -1;
     viewport()->update();
-    emit pendingLineCommitted();
+    emit pendingLineCommitted(text);
     return text;
 }
 

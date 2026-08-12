@@ -16,6 +16,7 @@
 #include "tutorialcontent.h"
 
 #include <QObject>
+#include <QRect>
 
 #include <QPointer>
 #include <QString>
@@ -57,13 +58,17 @@ public:
     TutorialView &operator=(TutorialView &&)      = delete;
 
     /**
-     * @brief Supply the widget an anchor names
-     * @param resolver called with an anchor, returns the widget to point at
+     * @brief Supply the area an anchor names
+     * @param resolver called with an anchor, returns the rectangle to ring, in
+     *        the host's coordinates; an empty rectangle means "nothing to point
+     *        at" and parks the callout in the corner
      *
-     * The caller owns the mapping because only the main window knows where its
-     * views currently live, and whether they exist at all.
+     * A rectangle rather than a widget, because the most common anchor is a
+     * single line of the editor rather than the editor itself.  The caller owns
+     * the mapping: only the main window knows where its views currently are,
+     * and whether they exist at all.
      */
-    void setAnchorResolver(std::function<QWidget *(StepAnchor)> resolver);
+    void setAnchorResolver(std::function<QRect(StepAnchor)> resolver);
 
     /** @brief Show the coach mark and display the current step */
     void start();
@@ -76,7 +81,7 @@ signals:
      * Pending means visible and highlighted but not yet accepted; the user
      * commits it with Tab, or it is withdrawn when they move on.
      */
-    void offerCommand(const QString &text);
+    void offerCommand(const QString &text, const QString &section);
 
     /** @brief Withdraw a pending command that was never committed */
     void withdrawCommand();
@@ -88,13 +93,16 @@ signals:
      * Used when the user skips ahead: the remaining lines of the step still
      * have to reach the script, or what they run next would not work.
      */
-    void insertCommand(const QString &text);
+    void insertCommand(const QString &text, const QString &section);
 
     /**
      * @brief Open a different input file
      * @param name file name relative to the tutorial's working directory
      */
     void openFileRequested(const QString &name);
+
+    /** @brief Write the section headings into an empty editor */
+    void seedSkeleton(const QStringList &lines);
 
     /** @brief The tour reached its end */
     void finished();
@@ -104,8 +112,14 @@ public slots:
     void showCurrentStep();
     /** @brief Reposition the callout; call when the host resizes */
     void reposition();
-    /** @brief The user committed the pending line, so move on */
-    void commandCommitted();
+    /**
+     * @brief The user accepted the pending line
+     * @param written the text of the line as it now stands
+     *
+     * For a line the user was asked to type, this is where it is checked; for
+     * one they merely accepted, the text is the command that was offered.
+     */
+    void commandCommitted(const QString &written);
 
     /**
      * @brief A simulation run finished
@@ -128,11 +142,11 @@ private:
     /// the anchor the current step asks for
     StepAnchor currentAnchor() const;
 
-    TutorialEngine *engine = nullptr;             ///< drives the tutorial (not owned)
-    QWidget *host          = nullptr;             ///< main window (not owned)
-    QPointer<TutorialSpotlight> spotlight;        ///< highlight layer, child of host
-    QPointer<TutorialCoach> coach;                ///< the callout, child of the spotlight
-    std::function<QWidget *(StepAnchor)> resolve; ///< anchor lookup
+    TutorialEngine *engine = nullptr;         ///< drives the tutorial (not owned)
+    QWidget *host          = nullptr;         ///< main window (not owned)
+    QPointer<TutorialSpotlight> spotlight;    ///< highlight layer, child of host
+    QPointer<TutorialCoach> coach;            ///< the callout, child of the spotlight
+    std::function<QRect(StepAnchor)> resolve; ///< anchor lookup
 };
 
 #endif // TUTORIALVIEW_H

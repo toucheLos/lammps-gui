@@ -106,6 +106,11 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     actionLabel->setFont(action);
     outer->addWidget(actionLabel);
 
+    feedbackLabel = new QLabel(this);
+    feedbackLabel->setWordWrap(true);
+    feedbackLabel->hide();
+    outer->addWidget(feedbackLabel);
+
     auto *row     = new QHBoxLayout;
     progressLabel = new QLabel(this);
     progressLabel->setFont(small);
@@ -147,6 +152,20 @@ void TutorialCoach::setCallToAction(const QString &text)
 {
     actionLabel->setText(text);
     actionLabel->setVisible(!text.isEmpty());
+}
+
+void TutorialCoach::setFeedback(const QString &text, bool ok)
+{
+    if (text.isEmpty()) {
+        feedbackLabel->hide();
+        return;
+    }
+    // green for accepted, a deep red for not-yet; both readable on the pale
+    // background, which is why they are not taken from the palette
+    feedbackLabel->setText(
+        QStringLiteral("<span style=\"color:%1;\">%2</span>")
+            .arg(ok ? QStringLiteral("#2e7d32") : QStringLiteral("#a8321e"), text.toHtmlEscaped()));
+    feedbackLabel->show();
 }
 
 void TutorialCoach::setBackEnabled(bool enable)
