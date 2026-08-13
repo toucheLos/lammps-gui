@@ -157,8 +157,11 @@ private:
     static QString renderText(const QString &text);
     /// the anchor the current step asks for
     StepAnchor currentAnchor() const;
-    /// take every line the tour wrote for a step back out of the script
+    /// take every line the tour wrote for a step back out of the script, and
+    /// restore anything that step displaced
     void rewind(const QString &stepId);
+    /// remove the lines a group supersedes, recording them for the rewind
+    void retractSuperseded(const QList<CommandLine> &group);
 
     /**
      * @brief RAII flag marking a write the tour made itself

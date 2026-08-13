@@ -256,6 +256,13 @@ void TutorialView::commandCommitted(const QString &written)
     // advances the tour
     if (inserting) return;
 
+    // and only a commit against something the tour actually offered.  A step
+    // with nothing on offer -- an OBSERVE step waiting on the Run button, or a
+    // SHOW step whose commands are all in -- reports allCommandsInserted(), so
+    // a stray commit would walk the tour forward a step at a time while the
+    // user was only editing their own script.
+    if (engine->nextGroup().isEmpty()) return;
+
     const CommandLine *cmd = engine->nextCommand();
     if (cmd && cmd->typed) {
         // compare word by word after canonicalization, so spacing, letter case
@@ -284,6 +291,12 @@ void TutorialView::commandCommitted(const QString &written)
         coach->setFeedback(QStringLiteral("That is it."), true);
     }
 
+    {
+        // the user put the new line in themselves; the superseded one still
+        // has to come out, and that removal is ours rather than theirs
+        const InsertGuard guard(inserting);
+        retractSuperseded(engine->nextGroup());
+    }
     engine->takeNextGroup();
     // accepting the last group of a step finishes it: waiting for a separate
     // Next press there just looks like nothing happened
@@ -316,14 +329,17 @@ void TutorialView::goNext()
     // dump every remaining command of the step at once, which is how commands
     // arrived in the script having never been shown or explained.
     if (!engine->nextGroup().isEmpty()) {
-        const TutorialStep *step = engine->currentStep();
-        const QStringList texts  = engine->takeNextGroup();
+        const TutorialStep *step        = engine->currentStep();
+        const QList<CommandLine> group  = engine->nextGroup();
+        const QStringList texts         = engine->takeNextGroup();
         // writing a line goes through the editor's pending-line machinery, so
         // it comes back as pendingLineCommitted -- which is also how the user
         // accepts a line with Tab.  Without this guard our own insertion is
         // mistaken for the user accepting the *next* group, and that group is
-        // written having never been offered.
+        // written having never been offered.  It covers the retraction too: a
+        // removal must not read as a user edit either.
         const InsertGuard guard(inserting);
+        retractSuperseded(group);
         for (const auto &text : texts)
             emit insertCommand(text, step ? step->section : QString());
         if (!engine->allCommandsInserted()) {
@@ -354,13 +370,33 @@ void TutorialView::goBack()
     showCurrentStep();
 }
 
+void TutorialView::retractSuperseded(const QList<CommandLine> &group)
+{
+    const TutorialStep *step = engine->currentStep();
+    if (!step) return;
+    for (const auto &cmd : group) {
+        if (cmd.replaces.isEmpty()) continue;
+        emit retractCommand(cmd.replaces);
+        engine->noteReplaced(step->id, cmd.replaces);
+    }
+}
+
 void TutorialView::rewind(const QString &stepId)
 {
+    const InsertGuard guard(inserting);
+
     const QStringList lines = engine->writtenFor(stepId);
     // last written, first removed: undoing in reverse keeps the matches honest
     for (int i = lines.size() - 1; i >= 0; --i)
         emit retractCommand(lines.at(i));
     engine->forgetWritten(stepId);
+
+    // and put back whatever this step displaced, so Back really is the inverse
+    // of Next rather than a one-way trim of the script
+    const TutorialStep *step = engine->content().stepById(stepId);
+    for (const auto &text : engine->replacedFor(stepId))
+        emit insertCommand(text, step ? step->section : QString());
+    engine->forgetReplaced(stepId);
 }
 
 // Local Variables:

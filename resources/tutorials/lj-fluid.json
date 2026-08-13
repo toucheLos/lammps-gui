@@ -294,7 +294,8 @@
           "section": "# 5) Run",
           "commands": [
             { "text": "minimize 1.0e-6 1.0e-6 1000 10000",
-              "explain": "Replace the `run 0 post no` line with this one. It performs an iterative energy minimization.",
+              "replaces": "run 0 post no",
+              "explain": "This takes the place of the `run 0 post no` line, which has done its job. It performs an iterative energy minimization.",
               "notes": [
                 { "arg": 1, "note": "energy tolerance, then force tolerance, then the maximum number of iterations and of force evaluations",
                   "alternatives": "Tightening the tolerances makes the minimization work harder before it stops; raising the two limits lets it run longer before giving up. Whichever criterion is met first ends it." } ] }

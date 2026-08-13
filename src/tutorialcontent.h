@@ -115,6 +115,11 @@ struct CommandLine {
     /// two create_atoms lines, a region and its complement -- and in a later
     /// tutorial a whole block of familiar commands can travel as one.
     bool together = false;
+    /// a command line this one supersedes, removed from the script as this one
+    /// is written.  The tour otherwise only ever appends, so a step that tells
+    /// the user to *replace* an earlier line -- `minimize` taking the place of
+    /// `run 0 post no` -- would leave both behind and read as a lie.
+    QString replaces;
 };
 
 /**

@@ -110,6 +110,7 @@ const QSet<QString> STEP_KEYS = {
 const QSet<QString> COMMAND_KEYS = {
     QStringLiteral("text"),    QStringLiteral("explain"), QStringLiteral("notes"),
     QStringLiteral("concept"), QStringLiteral("typed"),  QStringLiteral("together"),
+    QStringLiteral("replaces"),
 };
 const QSet<QString> NOTE_KEYS = {
     QStringLiteral("arg"),
@@ -301,6 +302,7 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("explain"), path, ctx, cmd.explain);
     readBool(obj, QStringLiteral("typed"), path, ctx, cmd.typed);
     readBool(obj, QStringLiteral("together"), path, ctx, cmd.together);
+    readString(obj, QStringLiteral("replaces"), path, ctx, cmd.replaces);
     if (readString(obj, QStringLiteral("concept"), path, ctx, cmd.conceptId))
         usedConcepts.insert(cmd.conceptId);
 
@@ -399,6 +401,19 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
                 ctx.error(sub(path, QStringLiteral("commands")),
                           QStringLiteral("a SHOW step exists to offer commands; use OBSERVE "
                                          "for a step that only explains something"));
+            // a typed line is offered blank for the user to fill in, which is a
+            // single act; it cannot also be pasted as part of a group
+            for (int i = 0; i < step.commands.size(); ++i) {
+                const auto &cmd = step.commands.at(i);
+                if (cmd.typed && cmd.together)
+                    ctx.error(sub(cmdpaths.at(i), QStringLiteral("typed")),
+                              QStringLiteral("a typed command cannot also be \"together\": the "
+                                             "group is pasted in one action, so there would be "
+                                             "nothing left for the user to type"));
+                if (!cmd.replaces.isEmpty() && cmd.replaces == cmd.text)
+                    ctx.error(sub(cmdpaths.at(i), QStringLiteral("replaces")),
+                              QStringLiteral("a command cannot replace itself"));
+            }
             break;
 
         case StepKind::Observe:
@@ -629,6 +644,23 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
                           QStringLiteral("step \"%1\" files its commands under \"%2\", which "
                                          "is not one of the skeleton's headings")
                               .arg(step.id, step.section));
+
+    // a "replaces" that names nothing is not an error the user would ever see:
+    // the removal silently does nothing and the script quietly keeps both lines,
+    // which is exactly the state the field exists to prevent
+    {
+        QSet<QString> writtenSoFar;
+        for (const auto &act : out.actlist)
+            for (const auto &step : act.steps)
+                for (const auto &cmd : step.commands) {
+                    if (!cmd.replaces.isEmpty() && !writtenSoFar.contains(cmd.replaces))
+                        ctx.error(QStringLiteral("acts"),
+                                  QStringLiteral("step \"%1\" replaces \"%2\", which no earlier "
+                                                 "command writes")
+                                      .arg(step.id, cmd.replaces));
+                    writtenSoFar.insert(cmd.text);
+                }
+    }
 
     // a step that hands the user the Run button has to come after something has
     // been put in the script, or they would be running an empty buffer

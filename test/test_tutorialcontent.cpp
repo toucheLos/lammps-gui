@@ -480,6 +480,63 @@ TEST(TutorialContentTest, TogetherParsesAndCannotOpenAStep)
         << qPrintable(formatContentIssues(badIssues));
 }
 
+// "replaces" is how a step supersedes an earlier line rather than appending
+// beside it.  A name that matches nothing is the dangerous case: the removal
+// silently does nothing and the script quietly keeps both lines.
+TEST(TutorialContentTest, ReplacesMustNameACommandAnEarlierStepWrites)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "run 0 post no", "explain": "one point" } ] },
+        { "id": "s2", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "minimize 1.0e-6 1.0e-6 1000 10000", "explain": "relax",
+            "replaces": "run 0 post no" } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    const TutorialStep *step = content.step(0, 1);
+    ASSERT_NE(step, nullptr);
+    EXPECT_EQ(step->commands.at(0).replaces, QStringLiteral("run 0 post no"));
+
+    // the same content with the order reversed: nothing has written the line yet
+    const QByteArray tooEarly = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "minimize 1.0e-6 1.0e-6 1000 10000", "explain": "relax",
+            "replaces": "run 0 post no" } ] } ] } ]
+    })";
+    QList<ContentIssue> lateIssues;
+    parseTutorialJson(tooEarly, &lateIssues);
+    EXPECT_GT(countContentErrors(lateIssues), 0);
+    EXPECT_TRUE(formatContentIssues(lateIssues).contains(QStringLiteral("no earlier command")))
+        << qPrintable(formatContentIssues(lateIssues));
+}
+
+// A typed line is offered blank for the user to fill in.  A group is pasted in
+// one action.  A command cannot be both.
+TEST(TutorialContentTest, ATypedCommandCannotAlsoBeGrouped)
+{
+    const QByteArray doc = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "mass 1 1.0", "explain": "light" },
+          { "text": "mass 2 5.0", "explain": "heavy", "typed": true, "together": true } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    parseTutorialJson(doc, &issues);
+    EXPECT_GT(countContentErrors(issues), 0);
+    EXPECT_TRUE(formatContentIssues(issues).contains(QStringLiteral("nothing left for the user")))
+        << qPrintable(formatContentIssues(issues));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

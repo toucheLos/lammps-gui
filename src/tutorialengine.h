@@ -124,6 +124,22 @@ public:
     void forgetWritten(const QString &stepId) { written.remove(stepId); }
 
     /**
+     * @brief Record a line this step took back out of the script
+     * @param stepId step doing the replacing
+     * @param text the superseded command, verbatim
+     *
+     * Stepping back has to put it there again.  Without this, Back leaves the
+     * script one line short of where the user left it and nothing says why.
+     */
+    void noteReplaced(const QString &stepId, const QString &text);
+
+    /** @brief The lines a step removed, oldest first */
+    QStringList replacedFor(const QString &stepId) const { return replaced.value(stepId); }
+
+    /** @brief Forget what a step replaced, after putting it back */
+    void forgetReplaced(const QString &stepId) { replaced.remove(stepId); }
+
+    /**
      * @brief Whether the saved progress points past the very first step
      *
      * Used to decide whether resuming is worth offering at all.
@@ -197,6 +213,9 @@ private:
     /// what the tour has written into the editor, keyed by step id, so that
     /// stepping back can take it out again
     QHash<QString, QStringList> written;
+    /// what the tour removed to make room, keyed by step id, so that stepping
+    /// back can put it back
+    QHash<QString, QStringList> replaced;
 };
 
 #endif // TUTORIALENGINE_H

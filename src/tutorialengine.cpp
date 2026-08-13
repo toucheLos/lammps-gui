@@ -69,6 +69,15 @@ QStringList TutorialEngine::takeNextGroup()
     return texts;
 }
 
+void TutorialEngine::noteReplaced(const QString &stepId, const QString &text)
+{
+    if (stepId.isEmpty() || text.isEmpty()) return;
+    // a step revisited with Back and replayed must not stack up duplicates of
+    // the same superseded line
+    if (replaced.value(stepId).contains(text)) return;
+    replaced[stepId].append(text);
+}
+
 bool TutorialEngine::allCommandsInserted() const
 {
     const TutorialStep *s = currentStep();
@@ -257,6 +266,7 @@ void TutorialEngine::resetProgress()
     exposures.clear();
     commandsSeen.clear();
     written.clear();
+    replaced.clear();
     act  = 0;
     step = 0;
     resetStepState();

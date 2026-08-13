@@ -374,6 +374,27 @@ TEST(TutorialEngineTest, AGroupIsRecordedLineByLineForRewinding)
     EXPECT_TRUE(engine.writtenFor(QStringLiteral("s1")).isEmpty());
 }
 
+// What a step removes has to be remembered, or Back leaves the script a line
+// short of where the user left it and nothing says why.
+TEST(TutorialEngineTest, ReplacedLinesAreRememberedForTheRewind)
+{
+    TutorialEngine engine(stubContent());
+    engine.noteReplaced(QStringLiteral("s1"), QStringLiteral("run 0 post no"));
+    EXPECT_EQ(engine.replacedFor(QStringLiteral("s1")).size(), 1);
+
+    // replaying a step revisited with Back must not stack up duplicates
+    engine.noteReplaced(QStringLiteral("s1"), QStringLiteral("run 0 post no"));
+    EXPECT_EQ(engine.replacedFor(QStringLiteral("s1")).size(), 1);
+
+    engine.forgetReplaced(QStringLiteral("s1"));
+    EXPECT_TRUE(engine.replacedFor(QStringLiteral("s1")).isEmpty());
+
+    // an empty step id or text is a no-op rather than a phantom entry
+    engine.noteReplaced(QString(), QStringLiteral("x"));
+    engine.noteReplaced(QStringLiteral("s1"), QString());
+    EXPECT_TRUE(engine.replacedFor(QStringLiteral("s1")).isEmpty());
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:
