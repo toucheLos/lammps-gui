@@ -647,6 +647,25 @@ private:
     void startInteractiveTutorial(const QString &path);
 
     /**
+     * @brief Record the input file a tutorial was set up with
+     * @param collection Index of the tutorial collection
+     * @param tutno 1-based tutorial number
+     * @param path Absolute path of the downloaded template
+     */
+    void rememberTutorialFile(int collection, int tutno, const QString &path);
+
+    /**
+     * @brief The recorded input file for a tutorial, if it is still there
+     * @param collection Index of the tutorial collection
+     * @param tutno 1-based tutorial number
+     * @return Absolute path, or an empty string when nothing usable is recorded
+     *
+     * Deliberately re-checks the file system rather than trusting a stored
+     * "downloaded" flag, which cannot notice the folder being moved or emptied.
+     */
+    QString rememberedTutorialFile(int collection, int tutno) const;
+
+    /**
      * @brief Keep the tutorial callout above views that were just raised
      *
      * No-op when no tutorial is running.

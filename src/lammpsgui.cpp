@@ -3265,12 +3265,69 @@ QWizardPage *LammpsGui::tutorialDirectory(int collection, int ntutorial)
     return page;
 }
 
+void LammpsGui::rememberTutorialFile(int collection, int tutno, const QString &path)
+{
+    const auto &coll = tutorialCollection(collection);
+    if (coll.key.isEmpty() || tutno < 1) return;
+
+    QSettings settings;
+    settings.beginGroup(Keys::GROUP_TUTORIAL);
+    settings.beginGroup(coll.key);
+    settings.beginGroup(QString::number(tutno));
+    settings.setValue(Keys::TUTORIAL_FILE, path);
+    settings.endGroup();
+    settings.endGroup();
+    settings.endGroup();
+}
+
+QString LammpsGui::rememberedTutorialFile(int collection, int tutno) const
+{
+    const auto &coll = tutorialCollection(collection);
+    if (coll.key.isEmpty() || tutno < 1) return {};
+
+    QSettings settings;
+    settings.beginGroup(Keys::GROUP_TUTORIAL);
+    settings.beginGroup(coll.key);
+    settings.beginGroup(QString::number(tutno));
+    const QString path = settings.value(Keys::TUTORIAL_FILE).toString();
+    settings.endGroup();
+    settings.endGroup();
+    settings.endGroup();
+
+    // the stored path is a hint, not a fact: the folder may have been moved,
+    // emptied or deleted since.  Ask the file system rather than trusting it.
+    return QFileInfo::exists(path) ? path : QString();
+}
+
 void LammpsGui::startTutorial(int collection, int tutno)
 {
     const auto &coll = tutorialCollection(collection);
     if (tutno < 1 || tutno > coll.count()) return;
     // tutorials beyond the available count are shown in the menu but not launchable yet
     if (tutno > coll.available) return;
+
+    // Already set up?  Then there is nothing for the wizard to ask: the files
+    // are downloaded and the folder is chosen.  Offer to pick up where they
+    // are, and keep a way back to the wizard for a fresh copy or another
+    // folder -- without it, a user whose files went stale would be stuck.
+    const QString existing = rememberedTutorialFile(collection, tutno);
+    if (!existing.isEmpty()) {
+        const QFileInfo info(existing);
+        QMessageBox box(this);
+        box.setWindowTitle("LAMMPS-GUI: Tutorial");
+        box.setText(QString("<p>%1 Tutorial %2 is already set up.</p>").arg(coll.name).arg(tutno));
+        box.setInformativeText(QString("The files are in \"%1\".").arg(info.absolutePath()));
+        auto *use = box.addButton("&Continue", QMessageBox::AcceptRole);
+        box.addButton("Set Up &Again...", QMessageBox::ActionRole);
+        box.setDefaultButton(use);
+        box.exec();
+        if (box.clickedButton() == use) {
+            openFile(existing);
+            const QString content = interactiveContentFor(collection, tutno);
+            if (!content.isEmpty()) startInteractiveTutorial(content);
+            return;
+        }
+    }
 
     delete wizard;
     wizard = new TutorialWizard(collection, tutno, this);
@@ -3775,7 +3832,10 @@ void LammpsGui::setupTutorial(int collection, int tutno, const QString &dir, boo
     // the initial template may itself be among the files that failed to download
     const QString firstFile = dir + QDir::separator() + first;
     const bool haveTemplate = !first.isEmpty() && QFileInfo::exists(firstFile);
-    if (haveTemplate) openFile(firstFile);
+    if (haveTemplate) {
+        openFile(firstFile);
+        rememberTutorialFile(collection, tutno, QFileInfo(firstFile).absoluteFilePath());
+    }
 
     // The tour drives the files that were just downloaded, so it starts only
     // after they are on disk and the first one is open.  Losing the template

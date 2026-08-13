@@ -346,6 +346,14 @@ browser.  The dialog will then start downloading the files requested
 (download progress is reported in the status line) and load the first
 input file for the selected session into LAMMPS-GUI.
 
+Once a tutorial has been set up, LAMMPS-GUI remembers the folder it was set
+up in.  Selecting that tutorial again does not run through the wizard a
+second time: it offers to continue with the files already downloaded,
+showing where they are, with a *Set Up Again...* button for fetching a fresh
+copy or working in a different folder.  Whether a tutorial counts as set up
+is decided by looking for its input file, not by a stored flag, so moving or
+deleting the folder simply brings the wizard back.
+
 Should individual tutorial files fail to download, the remaining files
 are still fetched, and a dialog afterwards lists the files that are
 missing.  That dialog offers a *Report Issue* button that opens the

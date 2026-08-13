@@ -415,6 +415,13 @@ inline const QString PROGRESS_STEP = QStringLiteral("progress_step");
 inline const QString COMMANDS_SEEN = QStringLiteral("commands_seen");
 /// Whether the tutorial wizard should start the interactive tour
 inline const QString INTERACTIVE     = QStringLiteral("interactive");
+/// Absolute path of the input file a tutorial was last set up with, stored per
+/// tutorial under GROUP_TUTORIAL/<collection key>/<number>/.  Only the path is
+/// recorded: whether the tutorial is *still* set up is decided by asking the
+/// file system, because a stored "downloaded" flag goes stale the moment the
+/// user moves or deletes the folder, and an auto-load that trusts it fails
+/// silently.
+inline const QString TUTORIAL_FILE = QStringLiteral("tutorial_file");
 inline const QString EXPERTMODE      = QStringLiteral("expertmode");
 inline const QString RAWBRUSH        = QStringLiteral("rawbrush");
 inline const QString RAWMODE         = QStringLiteral("rawmode");
