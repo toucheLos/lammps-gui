@@ -274,17 +274,26 @@ Dropped from the schema as surface with no consumer: `estimated_minutes`,
   needing *zero* new download plumbing. But those manifests live in the
   `lammpstutorials` repositories, which this project does not control. Until
   that is coordinated, bundle Tutorial 1 in `lammpsgui.qrc`.
-- **Content attribution and licensing is UNRESOLVED and blocks authoring.**
-  Tutorial 1's material derives from the third-party `lammpstutorials`
-  repositories; their license is not recorded anywhere in this repository, while
-  the GUI is GPL-2.0-or-later. `TutorialCollection::author` is the existing
-  attribution precedent. Every content file should carry a
-  `source` / `license` / `attribution` triple, and terms must be confirmed with
-  the tutorial authors before substantial content is written.
+- **Content attribution and licensing** -- *resolved; this bullet is kept for the
+  record.* It was recorded here as unresolved and blocking authoring, on the
+  grounds that the third-party `lammpstutorials` material carried no license we
+  could find while the GUI is GPL-2.0-or-later. It does carry one: the
+  `lammpstutorials-article` repository is **CC BY 4.0**, stated in its `LICENSE`
+  and repeated in the header of every input file with the DOI to cite.
+  Adaptation with attribution is permitted. Every content file carries the
+  `source` / `license` / `credit` triple, as intended. See
+  `tutorial-mode-redesign.md` for the full finding.
 
 ---
 
-## 7. Phase plan
+## 7. Phase plan  *(superseded)*
+
+**This plan is historical.** It was written around a recall-gated quiz with seven
+verbs (`READ`/`TYPE`/`FILL`/`FIX`/`PREDICT`/`TUNE`/`INSPECT`). That model was
+retired in favour of a guided tour with two step kinds; see
+`tutorial-mode-redesign.md` for the model actually built. The table is kept
+because the gates it names -- particularly measuring P2 on a real LAMMPS build --
+are still the right questions.
 
 Each phase ends at a stop-gate; report, then wait.
 

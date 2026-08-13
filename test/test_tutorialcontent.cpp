@@ -31,7 +31,6 @@ QByteArray docWithSteps(const QString &steps, const QString &concepts = QString(
       "title": "Tutorial 1",
       "collection": "softmatter",
       "tutorial": 1,
-      "skeleton_file": "initial.lmp",
       "attribution": { "source": "https://example.org", "license": "CC-BY-4.0",
                        "credit": "The tutorial authors" },
       "concepts": [ %2 ],
@@ -113,7 +112,6 @@ TEST(TutorialContentTest, MetadataIsParsed)
     EXPECT_EQ(content.schemaVersion(), 3);
     EXPECT_EQ(content.id(), QStringLiteral("lj-fluid"));
     EXPECT_EQ(content.tutorialNumber(), 1);
-    EXPECT_EQ(content.skeletonFile(), QStringLiteral("initial.lmp"));
     EXPECT_EQ(content.attribution().license, QStringLiteral("CC-BY-4.0"));
 }
 

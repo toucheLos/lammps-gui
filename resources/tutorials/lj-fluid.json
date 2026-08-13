@@ -5,7 +5,6 @@
   "collection": "softmatter",
   "tutorial": 1,
   "requires_packages": [],
-  "skeleton_file": "initial.lmp",
   "skeleton": [
     "# PART A - ENERGY MINIMIZATION",
     "# 1) Initialization",

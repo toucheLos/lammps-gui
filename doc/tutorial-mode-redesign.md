@@ -78,8 +78,9 @@ shipped, on evidence rather than caution. Tutorial 1 has six figures:
 | 2 | Screenshot of an older LAMMPS-GUI editor | Would ship **stale and misleading** |
 
 So five of six are things the user generates live, and the sixth should not ship at all.
-Bundling them also sharpens the unresolved licensing question -- figures are less
-arguable than prose, and we still have no terms from the authors.
+Bundling them would also mean redistributing the authors' own artwork rather than
+adapting their text, which is a stronger claim on the licence even though the licence
+turns out to allow it (see "Licensing", below).
 
 **Instead**, the figure slot shows, in priority order: a live snapshot of the user's own
 system; a small set of **authored diagrams we own** (the LJ potential curve, the
@@ -273,14 +274,42 @@ in with it.
 - **Not verifiable on a machine without `liblammps`:** the actual run, and everything the
   tour does after it.
 
+## Licensing  *(settled)*
+
+The source material is **CC BY 4.0**.  The `lammpstutorials-article` repository carries
+the full Creative Commons Attribution 4.0 International text as its `LICENSE`, and every
+input file repeats it in its own header along with the DOI to cite:
+
+```
+# LAMMPS Input File
+# Licensed under CC BY 4.0
+# A Set of Tutorials for the LAMMPS Simulation Package (LiveCoMS, 2025)
+# Please cite doi.org/10.33011/livecoms.6.1.3037
+```
+
+Adaptation with attribution is therefore permitted, which is what the content file does
+and what its `attribution` block records (`source`, `license`, `credit`).  This was
+previously recorded here and in `tutorial-mode-design.md` as unresolved and blocking
+release; it is neither.
+
+The article's **figures remain out by choice, not by licence** (see D2): the GUI renders
+the user's own system, which is strictly better than a picture of somebody else's.  Do
+not re-open this on licensing grounds.
+
 ## Still open
 
-1. **Schema v3 and the content.**  Delete the vestigial parameter and prediction types,
-   and rewrite Tutorial 1 to cover both halves of section 3.1 -- the second half
-   (cylinder regions, `write_data`, restarting from a data file, groups, `delete_atoms`)
-   is not covered at all yet, and works across three input files.
-2. **Figures** -- the article's figures are deliberately not shipped (see D2).  If the
-   licensing of the source material is ever settled, using one becomes a content edit
-   rather than a code change.
-3. **Content licensing** -- unresolved, and still blocks release.  See
-   `tutorial-mode-design.md`.
+1. **Nothing downstream of the Run button is verifiable** on a machine without
+   `liblammps`: the run itself, and the chart, image and log anchors the tour moves to
+   afterwards.
+2. **Tutorials 2 and up.**  Tutorial 1 is complete -- both halves of section 3.1, across
+   all three input files.  The multiple-choice interactive template discussed for later
+   tutorials is not built; typed drills and the tune control cover reinforcement so far.
+
+## Reference
+
+The content mirrors `files/tutorial1/initial.lmp` from the article repository: its six
+comment headings are the `skeleton` array, verbatim.  The wizard downloads and opens that
+file, so the tour files its commands under the headings the file already has, and
+`CodeEditor::seedSkeleton()` stands aside because the buffer is not empty.  The other two
+files the tour opens, `improved.min.lmp` and `improved.md.lmp`, are top-level entries in
+`files/tutorial1/.manifest` and so are downloaded alongside it.

@@ -81,7 +81,7 @@ const QSet<QString> ROOT_KEYS = {
     QStringLiteral("schema_version"), QStringLiteral("id"),
     QStringLiteral("title"),          QStringLiteral("collection"),
     QStringLiteral("tutorial"),       QStringLiteral("requires_packages"),
-    QStringLiteral("skeleton_file"),  QStringLiteral("skeleton"),
+    QStringLiteral("skeleton"),
     QStringLiteral("attribution"),    QStringLiteral("concepts"),
     QStringLiteral("acts"),
 };
@@ -591,7 +591,6 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
     readString(root, QStringLiteral("id"), QString(), ctx, out.ident, true);
     readString(root, QStringLiteral("title"), QString(), ctx, out.name, true);
     readString(root, QStringLiteral("collection"), QString(), ctx, out.coll);
-    readString(root, QStringLiteral("skeleton_file"), QString(), ctx, out.skeleton);
     readInt(root, QStringLiteral("tutorial"), QString(), ctx, out.tutno);
     readStringList(root, QStringLiteral("requires_packages"), QString(), ctx, out.packages);
     readStringList(root, QStringLiteral("skeleton"), QString(), ctx, out.skeletonlines);

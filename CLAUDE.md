@@ -74,8 +74,8 @@ ctest --test-dir build -R Framebuffer --output-on-failure   # GUI tests need Xvf
 - `test_*` executables — C++ unit tests (GoogleTest v1.17.0, fetched automatically
   via FetchContent); one per tested module: helpers, stdcapture, flagwarnings,
   dumpimage, movieimport, imagecache, leastsquares, plotdata, lepton, levmar,
-  customfunc, analysis, plotaxismath, plotblockdata, fitting, shortcuts, and
-  windowlayout
+  customfunc, analysis, plotaxismath, plotblockdata, fitting, shortcuts,
+  windowlayout, tutorialcontent, tutorialengine, and tutorialtext
 - `CommandLine.*` — command-line flag smoke tests
 - `Framebuffer.*` — Python/PyAutoGUI GUI tests run inside Xvfb; require `xvfb-run` and one of: `magick`, `import`, `xfce4-screenshooter`, or `gnome-screenshot`
 
@@ -258,6 +258,11 @@ decisions and caveats as binding unless we explicitly revise them here.
 | `src/setvariables.{cpp,h}` | Dialog for editing index-style LAMMPS variable name/value pairs |
 | `src/shellaliases.{cpp,h}` | `ShellAliases`: table of aliases defined in every shell the `CommandWindow` starts (works around rc sections gated on a terminal, and `ls` dropping its column format off one) |
 | `src/tutorialwizard.{cpp,h}` | Step-by-step wizard for setting up and launching LAMMPS tutorials |
+| `src/tutorialcontent.{cpp,h}` | Schema of an interactive tutorial (acts, steps, commands, concepts, `TuneControl`) plus the JSON loader and its path-addressed validation |
+| `src/tutorialengine.{cpp,h}` | `TutorialEngine`: cursor through the acts, command-group bookkeeping, the concept reminder budget, and saved progress. Holds no widgets |
+| `src/tutorialview.{cpp,h}` | `TutorialView`: turns the engine's cursor into a coach mark -- resolves anchors to rectangles, positions the callout, offers commands to the editor, checks typed answers |
+| `src/tutorialcoach.{cpp,h}` | `TutorialCoach` (the pale-yellow callout with its tail) and `TutorialSpotlight` (transparent ring layer). Colours live here, not in `constants.h`, which is Qt Core-only |
+| `src/tutorialtext.{cpp,h}` | Qt-free-ish text helpers shared by the tour: `canonicalWords`, `rewriteArgument`, `findCommandLine` |
 | `src/tutorials.{cpp,h}` | `TutorialCollection` metadata/registry for the available tutorial collections |
 | `src/fileviewer.{cpp,h}` | Read-only text viewer for files referenced in input scripts |
 | `src/aboutdialog.{cpp,h}` | Auto-scrolling About dialog showing LAMMPS version and style info |

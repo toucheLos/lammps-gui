@@ -229,8 +229,6 @@ public:
     int tutorialNumber() const { return tutno; }
     /** @brief LAMMPS packages that must be compiled in for this to be offered */
     const QStringList &requiredPackages() const { return packages; }
-    /** @brief File name of the stripped skeleton opened when the tutorial starts */
-    const QString &skeletonFile() const { return skeleton; }
     /**
      * @brief The empty section headings the script starts from
      *
@@ -287,7 +285,6 @@ private:
     QString coll;                               ///< owning collection key
     int tutno = 0;                              ///< 1-based tutorial number in the collection
     QStringList packages;                       ///< required LAMMPS packages
-    QString skeleton;                           ///< stripped skeleton file name
     QStringList skeletonlines;                  ///< section headings the script starts from
     TutorialAttribution credits;                ///< provenance
     QList<TutorialAct> actlist;                 ///< the acts

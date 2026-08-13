@@ -76,6 +76,9 @@ adding a tutorial is a content file rather than a code change.  See
 .. doxygenstruct:: TokenNote
    :members:
 
+.. doxygenstruct:: TuneControl
+   :members:
+
 .. doxygenstruct:: TutorialConcept
    :members:
 
@@ -94,6 +97,31 @@ adding a tutorial is a content file rather than a code change.  See
 .. doxygenfunction:: countContentErrors
 
 .. doxygenfunction:: formatContentIssues
+
+-----
+
+Interactive Tutorial Presentation
+---------------------------------
+
+Three objects drive a tutorial once its content is loaded.  ``TutorialEngine``
+holds the cursor and the reminder budget and owns no widgets, so the rules that
+matter are testable without a GUI.  ``TutorialView`` turns that cursor into a
+coach mark: it resolves each step's anchor to a live rectangle, positions the
+callout beside it, and feeds the editor the commands the step offers.
+``TutorialCoach`` is the callout itself, and ``TutorialSpotlight`` the
+transparent layer that rings whatever the step points at.
+
+.. doxygenclass:: TutorialEngine
+   :members:
+
+.. doxygenclass:: TutorialView
+   :members:
+
+.. doxygenclass:: TutorialCoach
+   :members:
+
+.. doxygenclass:: TutorialSpotlight
+   :members:
 
 -----
 

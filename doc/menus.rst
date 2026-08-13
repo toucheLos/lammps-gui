@@ -353,6 +353,45 @@ issue tracker of the tutorial's file repository in a web browser, so
 the missing files can be reported; alternatively they can be reported
 by email to akohlmey@gmail.com.
 
+.. _interactive_tutorial:
+
+Interactive tutorial mode
+"""""""""""""""""""""""""
+
+.. index:: tutorial; interactive mode
+.. index:: interactive tutorial
+
+For tutorials that have it available, the wizard offers an additional
+*Interactive tutorial* checkbox.  With it selected, LAMMPS-GUI does not
+simply open the input file and leave you to read the tutorial elsewhere:
+it walks you through the session inside the application itself.
+
+A pale yellow callout appears in the top right of the main window and
+follows the tutorial step by step.  For each step it explains what is
+being done and why, and highlights the line -- or the group of lines
+serving one purpose -- that comes next, directly in the editor.  Press
+`Tab` on the highlighted line to accept it, or use the *Next*
+button in the callout.  *Back* steps the tour backwards and removes the
+lines it wrote, leaving anything you edited yourself alone.
+
+The callout itself never shows the commands: it moves to whatever the
+step is talking about and rings it.  When the tutorial reaches a run, the
+callout moves to the *Run* button; once the simulation finishes it moves
+on to the charts, the snapshot image, or the log to explain what you are
+looking at.
+
+Some steps ask more of you than pressing a key.  A step may leave the
+highlighted line blank for you to type a command you have already met,
+checking your answer word by word and saying which word is wrong rather
+than only that something is; and a step may offer a control for changing
+one argument of a line already in your script, so that "raise the
+timestep and watch it go unstable" is something you do rather than read.
+
+Progress is remembered per tutorial, so closing LAMMPS-GUI and coming
+back offers to resume where you left off or to start over.  Nothing is
+ever locked: you can move forwards or backwards at any point, and the
+script in the editor is yours to change at any time.
+
 About
 ^^^^^
 
