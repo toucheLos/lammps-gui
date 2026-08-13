@@ -505,14 +505,12 @@ void LammpsGui::createTutorialMenu()
         }
     }
 
-    // Preview entry for the interactive tutorial mode.  The content is loaded
-    // from the bundled resource, so this works offline and with no download.
-    // Temporary: the finished feature hangs off the wizard's "Interactive"
-    // option rather than a menu entry of its own.
-    menu->addSeparator();
-    addMenuAction(menu, ":/icons/tutorial1-logo.png", "&Interactive Tutorial 1", "", [this]() {
-        startInteractiveTutorial(QStringLiteral(":/tutorials/lj-fluid.json"));
-    });
+    // The interactive tour has no menu entry of its own.  It is reached only
+    // through the wizard's "Guide me through it step by step" option, so the
+    // tutorial's input files have been downloaded into a directory the user
+    // chose before the first step runs.  A preview entry used to start the tour
+    // straight from the bundled content with nothing on disk; the tour then
+    // reached Act 7, asked to open improved.min.lmp, and silently did nothing.
 }
 
 QString LammpsGui::interactiveContentFor(int collection, int tutno)
@@ -625,7 +623,20 @@ void LammpsGui::openTutorialFile(const QString &name)
     // tutorial files live beside the script the user is working on
     const QFileInfo current(currentFile);
     const QString path = current.absoluteDir().absoluteFilePath(name);
-    if (QFileInfo::exists(path)) openFile(path);
+    if (QFileInfo::exists(path)) {
+        openFile(path);
+        return;
+    }
+
+    // say so rather than doing nothing.  The step has just told the user that
+    // the next input file is open in front of them; if its download failed,
+    // the report of that came and went a good twenty steps ago.
+    warning(this, "LAMMPS-GUI Warning",
+            QString("This tutorial step needs the file \"%1\", which is missing:").arg(name),
+            QString("It was expected in \"%1\". This file is downloaded together with the rest "
+                    "of the tutorial files; if the download reported missing files earlier, "
+                    "start the tutorial again from the Tutorials menu to fetch them.")
+                .arg(current.absolutePath()));
 }
 
 void LammpsGui::applyTutorialParameter(const QString &command, int argIndex, const QString &value)
@@ -3725,11 +3736,15 @@ void LammpsGui::setupTutorial(int collection, int tutno, const QString &dir, boo
 
     // the initial template may itself be among the files that failed to download
     const QString firstFile = dir + QDir::separator() + first;
-    if (!first.isEmpty() && QFileInfo::exists(firstFile)) openFile(firstFile);
+    const bool haveTemplate = !first.isEmpty() && QFileInfo::exists(firstFile);
+    if (haveTemplate) openFile(firstFile);
 
-    // the tour drives the files that were just downloaded, so it starts only
-    // after they are on disk and the first one is open
-    if (interactive) {
+    // The tour drives the files that were just downloaded, so it starts only
+    // after they are on disk and the first one is open.  Losing the template
+    // itself means the download did not work, and a tour of files that are not
+    // there is worse than no tour: the user would be told to look at a script
+    // that never arrived.  The missing-file report has already been shown.
+    if (interactive && haveTemplate) {
         const QString content = interactiveContentFor(collection, tutno);
         if (!content.isEmpty()) startInteractiveTutorial(content);
     }

@@ -636,6 +636,13 @@ private:
      * Loads and validates the content, builds the engine, restores any saved
      * progress, and shows the panel.  Content that fails validation is
      * reported and nothing is opened.
+     *
+     * Called only from setupTutorial(), after the tutorial's input files have
+     * been downloaded from the tutorial repository into a directory the user
+     * chose in the wizard.  The tour opens further files as it goes -- Tutorial
+     * 1 works across three of them -- so starting it without that download
+     * leaves those steps pointing at files that are not there.  Do not add a
+     * menu entry that calls this directly.
      */
     void startInteractiveTutorial(const QString &path);
 

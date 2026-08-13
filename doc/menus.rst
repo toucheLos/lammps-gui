@@ -362,9 +362,18 @@ Interactive tutorial mode
 .. index:: interactive tutorial
 
 For tutorials that have it available, the wizard offers an additional
-*Interactive tutorial* checkbox.  With it selected, LAMMPS-GUI does not
-simply open the input file and leave you to read the tutorial elsewhere:
-it walks you through the session inside the application itself.
+*Guide me through it step by step* checkbox.  With it selected, LAMMPS-GUI
+does not simply open the input file and leave you to read the tutorial
+elsewhere: it walks you through the session inside the application itself.
+
+Interactive mode is reached only through this checkbox, and so only after
+the wizard has downloaded the tutorial's input files into the folder you
+chose.  That is deliberate rather than incidental: a session works across
+more than one input file -- Tutorial 1 uses three -- and opens the next
+one when it gets there, so the files have to be on disk before the first
+step runs.  If the download loses the main input file, the tour does not
+start, and the report of what went missing points at the tutorial's issue
+tracker as described above.
 
 A pale yellow callout appears in the top right of the main window and
 follows the tutorial step by step.  For each step it explains what is
