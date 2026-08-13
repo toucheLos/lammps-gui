@@ -192,6 +192,17 @@ public:
     /** @brief Which side of the target the bubble is drawn on */
     void setSide(Side side);
 
+    /**
+     * @brief Put the tail on a particular row (or column) of the bubble's edge
+     * @param pos offset along the tail's edge, in this widget's coordinates;
+     *        negative centres it
+     *
+     * A callout beside a single line of the editor is far taller than the line
+     * it points at, so a tail at the bubble's own centre points at empty space
+     * several rows away.  The caller knows where the line actually is.
+     */
+    void setTailOffset(int pos);
+
     /** @brief Preferred size for a given available width */
     QSize sizeForWidth(int width) const;
 
@@ -225,7 +236,8 @@ private:
     QPushButton *backButton = nullptr; ///< step backwards
     QPushButton *nextButton = nullptr; ///< step forwards
 
-    Side pointing = Side::None; ///< which edge carries the tail
+    Side pointing  = Side::None; ///< which edge carries the tail
+    int tailOffset = -1;         ///< where along that edge; negative means centred
 };
 
 #endif // TUTORIALCOACH_H

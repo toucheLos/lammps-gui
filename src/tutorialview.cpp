@@ -110,6 +110,7 @@ void TutorialView::reposition()
         // no target: park in the top right, which is where the tour lives by
         // default and where the user learns to look for it
         coach->setSide(TutorialCoach::Side::None);
+        coach->setTailOffset(-1);
         coach->setGeometry(host->width() - size.width() - Cfg::COACH_GAP, Cfg::COACH_GAP,
                            size.width(), size.height());
         coach->raise();
@@ -133,16 +134,23 @@ void TutorialView::reposition()
         QPoint pos;
     };
     const int midY = targetRect.center().y() - size.height() / 2;
+    // Right first: the target is usually a line of the script, and the reading
+    // order puts the explanation after the thing it explains rather than before.
     for (const Placement &p :
-         {Placement{TutorialCoach::Side::Left,
-                    {targetRect.left() - Cfg::COACH_GAP - size.width(), midY}},
-          Placement{TutorialCoach::Side::Right, {targetRect.right() + Cfg::COACH_GAP, midY}}}) {
+         {Placement{TutorialCoach::Side::Right, {targetRect.right() + Cfg::COACH_GAP, midY}},
+          Placement{TutorialCoach::Side::Left,
+                    {targetRect.left() - Cfg::COACH_GAP - size.width(), midY}}}) {
         const QRect placed(clampInside(p.pos), size);
         // the clamp can shove a placement back over the target on a narrow
         // window, so the overlap is re-tested after clamping rather than before
         if (!placed.intersects(targetRect) && host->rect().contains(placed)) {
             coach->setSide(p.side);
             coach->setGeometry(placed);
+            // The callout is far taller than the line it points at, and the
+            // clamp above may have slid it up or down to stay on screen, so the
+            // tail is placed on the target's own row rather than at the
+            // bubble's centre -- otherwise it points at a line several rows off.
+            coach->setTailOffset(targetRect.center().y() - placed.top());
             coach->raise();
             return;
         }
@@ -172,6 +180,7 @@ void TutorialView::reposition()
     }
 
     coach->setSide(TutorialCoach::Side::None);
+    coach->setTailOffset(-1);
     coach->setGeometry(best);
     coach->raise();
 }

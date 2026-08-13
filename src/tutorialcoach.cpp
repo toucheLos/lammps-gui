@@ -229,6 +229,13 @@ void TutorialCoach::setNextEnabled(bool enable)
     nextButton->setEnabled(enable);
 }
 
+void TutorialCoach::setTailOffset(int pos)
+{
+    if (tailOffset == pos) return;
+    tailOffset = pos;
+    update();
+}
+
 void TutorialCoach::setSide(Side side)
 {
     if (pointing == side) return;
@@ -269,8 +276,17 @@ void TutorialCoach::paintEvent(QPaintEvent *event)
 
     // the tail, pointing at whatever the spotlight is ringing
     if (pointing != Side::None) {
-        const qreal cx = body.center().x();
-        const qreal cy = body.center().y();
+        // the tail sits where the caller asked, clamped so it stays on a
+        // straight part of the edge rather than riding over a rounded corner
+        const qreal inset = Cfg::COACH_RADIUS + t;
+        const qreal cx    = (pointing == Side::Above || pointing == Side::Below) && tailOffset >= 0
+                                ? qBound(body.left() + inset, static_cast<qreal>(tailOffset),
+                                         body.right() - inset)
+                                : body.center().x();
+        const qreal cy    = (pointing == Side::Left || pointing == Side::Right) && tailOffset >= 0
+                                ? qBound(body.top() + inset, static_cast<qreal>(tailOffset),
+                                         body.bottom() - inset)
+                                : body.center().y();
         QPolygonF tail;
         switch (pointing) {
             case Side::Above: // bubble above the target: tail on the bottom edge

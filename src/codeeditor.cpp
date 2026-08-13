@@ -281,13 +281,36 @@ bool CodeEditor::onPendingLine() const
 
 QRect CodeEditor::pendingLineArea() const
 {
-    const int target       = pendingLine >= 0 ? pendingLine : textCursor().blockNumber();
-    const QTextBlock block = document()->findBlockByNumber(target);
-    if (!block.isValid() || !block.isVisible()) return {};
+    const int first = pendingLine >= 0 ? pendingLine : textCursor().blockNumber();
+    const int count = pendingLine >= 0 ? qMax(pendingCount, 1) : 1;
 
-    const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
-    const QRect area(0, static_cast<int>(geom.top()), viewport()->width(),
-                     static_cast<int>(geom.height()));
+    QRect area;
+    for (int i = 0; i < count; ++i) {
+        const QTextBlock block = document()->findBlockByNumber(first + i);
+        if (!block.isValid() || !block.isVisible()) continue;
+        const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
+
+        // The text, not the whole row.  A rectangle spanning the viewport
+        // leaves nothing to the right of it, so a callout that wants to sit
+        // beside the line has nowhere to go and ends up above or below it --
+        // on top of the rest of the script.  Measuring the string means there
+        // is room beside all but the longest commands.
+        qreal textWidth = 0.0;
+        if (const QTextLayout *layout = block.layout())
+            for (int l = 0; l < layout->lineCount(); ++l)
+                textWidth = qMax(textWidth, layout->lineAt(l).naturalTextWidth());
+
+        const QRect line(static_cast<int>(geom.left()), static_cast<int>(geom.top()),
+                         static_cast<int>(textWidth), static_cast<int>(geom.height()));
+        area = area.isNull() ? line : area.united(line);
+    }
+    if (area.isNull()) return {};
+
+    // a blank line offered for the user to type into still needs something to
+    // ring, and something for the callout to sit beside
+    const int minimum = fontMetrics().horizontalAdvance(QLatin1Char('0')) * 8;
+    if (area.width() < minimum) area.setWidth(minimum);
+
     // a line scrolled out of view has nothing worth ringing
     return area.intersected(viewport()->rect());
 }
