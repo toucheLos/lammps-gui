@@ -446,6 +446,15 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
                               QStringLiteral("a typed command cannot also be \"together\": the "
                                              "group is pasted in one action, so there would be "
                                              "nothing left for the user to type"));
+                // the user types one line, but the whole group is consumed by
+                // that single act -- anything travelling with a typed command
+                // would be recorded as written without ever being written
+                if (cmd.typed && i + 1 < step.commands.size() &&
+                    step.commands.at(i + 1).together)
+                    ctx.error(sub(cmdpaths.at(i), QStringLiteral("typed")),
+                              QStringLiteral("a typed command has to stand alone: the command "
+                                             "after it is \"together\", and the user types only "
+                                             "one line"));
                 if (!cmd.replaces.isEmpty() && cmd.replaces == cmd.text)
                     ctx.error(sub(cmdpaths.at(i), QStringLiteral("replaces")),
                               QStringLiteral("a command cannot replace itself"));

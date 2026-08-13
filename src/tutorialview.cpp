@@ -289,8 +289,13 @@ void TutorialView::commandCommitted(const QString &written)
                         break;
                     }
             coach->setFeedback(why, false);
-            // leave the line pending so they can correct it in place
-            emit offerCommands(QStringList(), engine->currentStep()->section);
+            // hand the attempt back as the pending line rather than leaving it
+            // committed and opening a fresh blank one below it: the feedback
+            // names the word that is wrong, so the user wants to edit what they
+            // wrote, and a retry must not leave a dead line behind each time
+            const InsertGuard guard(inserting);
+            emit retractCommand(written);
+            emit offerCommands(QStringList() << written, engine->currentStep()->section);
             return;
         }
         coach->setFeedback(QStringLiteral("That is it."), true);

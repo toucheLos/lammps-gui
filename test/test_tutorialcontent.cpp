@@ -535,6 +535,23 @@ TEST(TutorialContentTest, ATypedCommandCannotAlsoBeGrouped)
     EXPECT_GT(countContentErrors(issues), 0);
     EXPECT_TRUE(formatContentIssues(issues).contains(QStringLiteral("nothing left for the user")))
         << qPrintable(formatContentIssues(issues));
+
+    // and the mirror case: the drill itself stands alone, but the command after
+    // it travels with it, so accepting the one typed line would consume both
+    const QByteArray trailing = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "thermo 50", "explain": "every fifty steps", "typed": true },
+          { "text": "thermo_style custom step temp", "explain": "columns",
+            "together": true } ] } ] } ]
+    })";
+    QList<ContentIssue> trailingIssues;
+    parseTutorialJson(trailing, &trailingIssues);
+    EXPECT_GT(countContentErrors(trailingIssues), 0);
+    EXPECT_TRUE(formatContentIssues(trailingIssues).contains(QStringLiteral("has to stand alone")))
+        << qPrintable(formatContentIssues(trailingIssues));
 }
 
 // A tune control edits an argument of a line the script already holds, so the
