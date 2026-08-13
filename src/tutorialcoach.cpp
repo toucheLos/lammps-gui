@@ -97,6 +97,11 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     bodyText = new QTextBrowser(this);
     bodyText->setFrameShape(QFrame::NoFrame);
     bodyText->setOpenExternalLinks(true);
+    // the explanations are worth keeping: selectable by mouse and keyboard, with
+    // the ordinary read-only context menu (Copy, Select All) rather than none
+    bodyText->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard |
+                                      Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
+    bodyText->setContextMenuPolicy(Qt::DefaultContextMenu);
     // the bubble paints its own background, so the text view must not paint one
     bodyText->viewport()->setAutoFillBackground(false);
     bodyText->setStyleSheet(QStringLiteral("background: transparent;"));

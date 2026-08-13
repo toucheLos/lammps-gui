@@ -223,6 +223,8 @@ inline const QString LAMMPS_ICON = QStringLiteral(":/icons/lammps-icon-128x128.p
 /// Object name of the Run button in the status bar, so the interactive
 /// tutorial can find the widget it needs to point at without a stored pointer
 inline const QString RUN_BUTTON_NAME = QStringLiteral("runButton");
+/// object name of the status bar's snapshot button, so a tutorial can point at it
+inline const QString SNAPSHOT_BUTTON_NAME = QStringLiteral("snapshotButton");
 /** path to the command spec table resource for the syntax engine */
 inline const QString SYNTAX_SPEC_TABLE = QStringLiteral(":/command_specs.table");
 

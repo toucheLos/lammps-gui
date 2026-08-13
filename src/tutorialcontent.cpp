@@ -46,8 +46,10 @@ struct AnchorName {
     StepAnchor anchor;
 };
 const AnchorName ANCHOR_NAMES[] = {
-    {"none", StepAnchor::None},   {"editor", StepAnchor::Editor}, {"run", StepAnchor::Run},
-    {"chart", StepAnchor::Chart}, {"image", StepAnchor::Image},   {"log", StepAnchor::Log},
+    {"none", StepAnchor::None},           {"editor", StepAnchor::Editor},
+    {"editor_all", StepAnchor::EditorAll}, {"run", StepAnchor::Run},
+    {"snapshot", StepAnchor::Snapshot},   {"chart", StepAnchor::Chart},
+    {"image", StepAnchor::Image},         {"log", StepAnchor::Log},
 };
 
 /// generic lookup over one of the name tables above
@@ -106,6 +108,7 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("section"),    QStringLiteral("expect"),   QStringLiteral("run_after_insert"),
     QStringLiteral("checkpoint"), QStringLiteral("anchor"),   QStringLiteral("call_to_action"),
     QStringLiteral("open_file"),  QStringLiteral("tune"),
+    QStringLiteral("wait_after_run"),
 };
 const QSet<QString> TUNE_KEYS = {
     QStringLiteral("command"), QStringLiteral("arg"), QStringLiteral("from"),
@@ -355,6 +358,7 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("teach"), path, ctx, step.teach);
     readString(obj, QStringLiteral("expect"), path, ctx, step.expect);
     readBool(obj, QStringLiteral("checkpoint"), path, ctx, step.checkpoint);
+    readBool(obj, QStringLiteral("wait_after_run"), path, ctx, step.waitAfterRun);
     readBool(obj, QStringLiteral("run_after_insert"), path, ctx, step.runAfterInsert);
     readString(obj, QStringLiteral("call_to_action"), path, ctx, step.callToAction);
     readString(obj, QStringLiteral("open_file"), path, ctx, step.openFile);
@@ -470,6 +474,10 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
                 ctx.error(sub(path, QStringLiteral("anchor")),
                           QStringLiteral("an OBSERVE step needs an anchor; without one it "
                                          "points at nothing"));
+            if (step.waitAfterRun && step.anchor != StepAnchor::Run)
+                ctx.error(sub(path, QStringLiteral("wait_after_run")),
+                          QStringLiteral("only a step anchored to the Run button waits on a "
+                                         "run; elsewhere there is no run to wait for"));
             if (step.callToAction.isEmpty() && step.anchor == StepAnchor::Run)
                 ctx.warn(sub(path, QStringLiteral("call_to_action")),
                          QStringLiteral("a step pointing at the Run button should say to "

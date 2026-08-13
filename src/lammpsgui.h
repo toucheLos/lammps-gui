@@ -647,6 +647,13 @@ private:
     void startInteractiveTutorial(const QString &path);
 
     /**
+     * @brief Keep the tutorial callout above views that were just raised
+     *
+     * No-op when no tutorial is running.
+     */
+    void raiseTutorialOverlay();
+
+    /**
      * @brief Append a command accepted by the tutorial to the editor
      * @param text the accepted command line
      */

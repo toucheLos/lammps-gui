@@ -576,6 +576,19 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
             if (!w || !w->isVisible()) return {};
             return {w->mapTo(this, QPoint(0, 0)), w->size()};
         };
+        // presenter(), not view(): with the docked layout the thing on screen
+        // is the QDockWidget wrapping the view, and it is the dock whose
+        // visibility tracks whether the user can actually see that panel.  With
+        // individual windows the two are the same object.
+        const auto slotArea = [this, &areaOf](ViewSlot slot) -> QRect {
+            if (!viewlayout) return {};
+            QWidget *w = viewlayout->presenter(slot);
+            // an individual window is a top level of its own, so it has no
+            // rectangle inside this one to ring; the callout parks instead
+            if (w && w->isWindow() && w != this) return {};
+            return areaOf(w);
+        };
+
         switch (anchor) {
             case StepAnchor::Editor:
                 // the line being written, not the whole editor: ringing the
@@ -583,15 +596,22 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
                 // nothing in particular
                 return textEdit->pendingLineArea().translated(
                     textEdit->viewport()->mapTo(this, QPoint(0, 0)));
+            case StepAnchor::EditorAll:
+                // the exception: a step about the shape of the file as a whole,
+                // before any one line is the subject
+                return areaOf(textEdit);
             case StepAnchor::Run:
                 return areaOf(statusbar ? statusbar->findChild<QWidget *>(Cfg::RUN_BUTTON_NAME)
                                         : nullptr);
+            case StepAnchor::Snapshot:
+                return areaOf(statusbar ? statusbar->findChild<QWidget *>(Cfg::SNAPSHOT_BUTTON_NAME)
+                                        : nullptr);
             case StepAnchor::Chart:
-                return areaOf(viewlayout ? viewlayout->view(ViewSlot::Chart) : nullptr);
+                return slotArea(ViewSlot::Chart);
             case StepAnchor::Image:
-                return areaOf(viewlayout ? viewlayout->view(ViewSlot::Image) : nullptr);
+                return slotArea(ViewSlot::Image);
             case StepAnchor::Log:
-                return areaOf(viewlayout ? viewlayout->view(ViewSlot::Log) : nullptr);
+                return slotArea(ViewSlot::Log);
             case StepAnchor::None:
                 break;
         }
@@ -619,6 +639,14 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     connect(this, &LammpsGui::runFinished, tutorialview, &TutorialView::runFinished);
 
     tutorialview->start();
+}
+
+void LammpsGui::raiseTutorialOverlay()
+{
+    // the callout and its spotlight are ordinary children of the main window,
+    // so anything raised above them hides them.  Repositioning re-raises both
+    // and re-resolves the anchor, which is what a view appearing changes.
+    if (tutorialview) tutorialview->reposition();
 }
 
 void LammpsGui::openTutorialFile(const QString &name)
@@ -729,6 +757,8 @@ void LammpsGui::createStatusBar()
 
     auto *imgbtn = new QPushButton(QIcon(":/icons/image-viewer.svg"), "");
     imgbtn->setToolTip("Create snapshot image");
+    // named so the interactive tutorial can find it and point at it
+    imgbtn->setObjectName(Cfg::SNAPSHOT_BUTTON_NAME);
     connect(imgbtn, &QPushButton::released, this, &LammpsGui::renderImage);
     statusbar->addWidget(imgbtn);
 
@@ -2742,6 +2772,10 @@ void LammpsGui::renderImage()
     }
     // an explicit request to look at the new image
     viewlayout->raise(ViewSlot::Image);
+    // ... which stacks the image above its siblings, the tutorial callout among
+    // them.  On the first render that put the viewer straight on top of the very
+    // step explaining it.
+    raiseTutorialOverlay();
 }
 
 void LammpsGui::viewSlides()
@@ -2806,6 +2840,7 @@ void LammpsGui::openCommandWindow()
 {
     createCommandWindow();
     viewlayout->raise(ViewSlot::Command);
+    raiseTutorialOverlay();
 }
 
 void LammpsGui::viewCommand()

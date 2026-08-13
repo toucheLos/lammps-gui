@@ -130,6 +130,17 @@ public:
     QWidget *view(ViewSlot slot) const;
 
     /**
+     * @brief The widget on screen that represents a slot
+     * @param slot Slot to query
+     * @return The dock when docked, the view itself otherwise; nullptr if empty
+     *
+     * What a caller wants when it needs the rectangle the user actually sees,
+     * or the visibility that reflects whether they can see it: docked, a view
+     * hidden behind another tab is still "visible" while its dock is not.
+     */
+    QWidget *presenter(ViewSlot slot) const;
+
+    /**
      * @brief Show the view in a slot
      * @param slot Slot to show
      *
@@ -296,10 +307,6 @@ private:
 
     /// The dock holding a slot, or nullptr in windowed mode.
     QDockWidget *dock(ViewSlot slot) const { return docks[static_cast<int>(slot)]; }
-
-    /// The widget whose visibility represents a slot: the dock when docked,
-    /// the view itself otherwise.
-    QWidget *presenter(ViewSlot slot) const;
 
     QMainWindow *mainwindow;   ///< Main window the views are shown in or docked into
     LayoutMode layoutmode;     ///< Presentation policy chosen at construction

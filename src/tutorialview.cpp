@@ -116,32 +116,63 @@ void TutorialView::reposition()
         return;
     }
 
-    // prefer left of the target, then right, then above, then below: the views
-    // being pointed at are usually on the right hand side of the window
-    TutorialCoach::Side side = TutorialCoach::Side::Left;
-    QPoint pos;
-    if (targetRect.left() - Cfg::COACH_GAP - size.width() >= 0) {
-        side = TutorialCoach::Side::Left;
-        pos  = {targetRect.left() - Cfg::COACH_GAP - size.width(),
-                targetRect.center().y() - size.height() / 2};
-    } else if (targetRect.right() + Cfg::COACH_GAP + size.width() <= host->width()) {
-        side = TutorialCoach::Side::Right;
-        pos  = {targetRect.right() + Cfg::COACH_GAP, targetRect.center().y() - size.height() / 2};
-    } else if (targetRect.top() - Cfg::COACH_GAP - size.height() >= 0) {
-        side = TutorialCoach::Side::Above;
-        pos  = {targetRect.center().x() - size.width() / 2,
-                targetRect.top() - Cfg::COACH_GAP - size.height()};
-    } else {
-        side = TutorialCoach::Side::Below;
-        pos  = {targetRect.center().x() - size.width() / 2, targetRect.bottom() + Cfg::COACH_GAP};
+    // Beside the target is the only placement that can point at something
+    // without sitting on it, so those are the only two tried.  Above and Below
+    // used to be tried next, and for the commonest target of all -- a line of
+    // the editor, which spans the full width of the viewport -- they put the
+    // callout squarely on top of the surrounding lines, covering the very
+    // script the step was talking about.
+    const auto clampInside = [&](QPoint p) {
+        p.setX(qBound(Cfg::COACH_GAP, p.x(), host->width() - size.width() - Cfg::COACH_GAP));
+        p.setY(qBound(Cfg::COACH_GAP, p.y(), host->height() - size.height() - Cfg::COACH_GAP));
+        return p;
+    };
+
+    struct Placement {
+        TutorialCoach::Side side;
+        QPoint pos;
+    };
+    const int midY = targetRect.center().y() - size.height() / 2;
+    for (const Placement &p :
+         {Placement{TutorialCoach::Side::Left,
+                    {targetRect.left() - Cfg::COACH_GAP - size.width(), midY}},
+          Placement{TutorialCoach::Side::Right, {targetRect.right() + Cfg::COACH_GAP, midY}}}) {
+        const QRect placed(clampInside(p.pos), size);
+        // the clamp can shove a placement back over the target on a narrow
+        // window, so the overlap is re-tested after clamping rather than before
+        if (!placed.intersects(targetRect) && host->rect().contains(placed)) {
+            coach->setSide(p.side);
+            coach->setGeometry(placed);
+            coach->raise();
+            return;
+        }
     }
 
-    // keep the whole callout inside the window whatever the target's position
-    pos.setX(qBound(Cfg::COACH_GAP, pos.x(), host->width() - size.width() - Cfg::COACH_GAP));
-    pos.setY(qBound(Cfg::COACH_GAP, pos.y(), host->height() - size.height() - Cfg::COACH_GAP));
+    // Nothing fits beside it.  Park in a corner and drop the tail: the ring
+    // already says what is meant, and a tail pointing clear across the window
+    // says less than no tail at all.  The top right is the corner the user
+    // learns to look at, so it wins ties; the others are there for when the
+    // thing being pointed at is up there too.
+    const int left   = Cfg::COACH_GAP;
+    const int right  = host->width() - size.width() - Cfg::COACH_GAP;
+    const int top    = Cfg::COACH_GAP;
+    const int bottom = host->height() - size.height() - Cfg::COACH_GAP;
 
-    coach->setSide(side);
-    coach->setGeometry(QRect(pos, size));
+    QRect best;
+    int leastOverlap = -1;
+    for (const QPoint &corner : {QPoint(right, top), QPoint(right, bottom), QPoint(left, bottom),
+                                 QPoint(left, top)}) {
+        const QRect candidate(clampInside(corner), size);
+        const QRect shared  = candidate.intersected(targetRect);
+        const int overlap   = shared.width() * shared.height();
+        if (leastOverlap < 0 || overlap < leastOverlap) {
+            leastOverlap = overlap;
+            best         = candidate;
+        }
+    }
+
+    coach->setSide(TutorialCoach::Side::None);
+    coach->setGeometry(best);
     coach->raise();
 }
 
@@ -154,6 +185,11 @@ void TutorialView::showCurrentStep()
                                          "editor is yours -- keep changing it and re-running to "
                                          "see what happens.</p>"));
         coach->setCallToAction(QString());
+        coach->setFeedback(QString(), true);
+        // the last step of Tutorial 1 carries a tune control, and without this
+        // it stayed on screen offering to edit a script the tour has finished
+        // talking about
+        coach->setTune(TuneControl());
         coach->setProgress(engine->content().stepCount(), engine->content().stepCount());
         coach->setNextText(QStringLiteral("&Done"));
         coach->setNextEnabled(true);
@@ -238,11 +274,16 @@ void TutorialView::showCurrentStep()
                 QStringLiteral("Type it yourself on the highlighted line, then press Tab."));
         } else {
             emit offerCommands(texts, step->section);
+            // a step that has something particular to say about accepting these
+            // lines says it; otherwise the generic prompt, which is right almost
+            // everywhere and would be tedious to repeat in the content
             coach->setCallToAction(
-                texts.size() > 1
-                    ? QStringLiteral("Press Tab in the editor to accept these %1 lines.")
-                          .arg(texts.size())
-                    : QStringLiteral("Press Tab in the editor to accept this line."));
+                !step->callToAction.isEmpty()
+                    ? step->callToAction
+                    : (texts.size() > 1
+                           ? QStringLiteral("Press Tab in the editor to accept these %1 lines.")
+                                 .arg(texts.size())
+                           : QStringLiteral("Press Tab in the editor to accept this line.")));
         }
     } else {
         coach->setCallToAction(step->callToAction);
@@ -325,9 +366,20 @@ void TutorialView::runFinished(bool success)
 {
     const TutorialStep *step = engine->currentStep();
     if (!step || step->anchor != StepAnchor::Run) return;
-    // a failed run keeps the user where the failure is; only a clean one moves
-    // the tour on to look at the results
-    if (success) engine->next();
+    if (!success) return; // a failed run keeps the user where the failure is
+
+    // Following the run automatically is what makes the tour feel like it is
+    // watching with you.  A step can opt out when what comes next would sweep
+    // the results away -- writing a data file and opening a different script --
+    // and the user has not had a chance to look at them yet.
+    if (step->waitAfterRun) {
+        coach->setCallToAction(
+            QStringLiteral("The run has finished. Look at the results, then press Next when "
+                           "you are ready to move on."));
+        coach->setFeedback(QStringLiteral("Run complete."), true);
+        return;
+    }
+    engine->next();
 }
 
 void TutorialView::goNext()

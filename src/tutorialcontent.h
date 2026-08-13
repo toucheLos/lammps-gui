@@ -38,12 +38,14 @@ enum class StepKind : quint8 {
  * rather than stored, because some of these views are destroyed and rebuilt.
  */
 enum class StepAnchor : quint8 {
-    None,   ///< nothing in particular; the callout parks in the top right
-    Editor, ///< the input script
-    Run,    ///< the Run button
-    Chart,  ///< the charts view
-    Image,  ///< the snapshot image view
-    Log     ///< the output view
+    None,      ///< nothing in particular; the callout parks in the top right
+    Editor,    ///< the line, or group of lines, currently being offered
+    EditorAll, ///< the whole input script, for a step about the file as a whole
+    Run,       ///< the Run button
+    Snapshot,  ///< the status bar's snapshot-image button
+    Chart,     ///< the charts view
+    Image,     ///< the snapshot image view
+    Log        ///< the output view
 };
 
 /**
@@ -174,6 +176,11 @@ struct TutorialStep {
 
     bool runAfterInsert = false; ///< Show: offer a run once the lines are in
     bool checkpoint     = false; ///< a milestone worth pausing on
+    /// Observe on the Run button: stay put when the run finishes instead of
+    /// following it on automatically.  For a step whose next move is drastic --
+    /// writing a file and opening a different script -- the user needs a chance
+    /// to look at what they just produced first.
+    bool waitAfterRun = false;
 
     /// optional control for changing one argument of an existing line
     TuneControl tune;

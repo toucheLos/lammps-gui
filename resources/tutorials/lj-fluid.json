@@ -54,10 +54,18 @@
       "title": "Initialization",
       "steps": [
         {
+          "id": "a1-s0",
+          "kind": "OBSERVE",
+          "title": "Choose the rules of the world",
+          "teach": "This is your input script, and for now it is only an outline.\n\nA LAMMPS input script is read strictly top to bottom, and the order matters: some commands only work *before* the simulation box exists, others only after, and only a few work in both places. Rather than memorise that, the script is laid out in five labelled sections and filled in turn. Everything after a `#` is a comment, so the headings you see are notes to yourself and nothing more.\n\nOver the next steps each section fills in, one command at a time, and you will end up with a script that runs.",
+          "anchor": "editor_all",
+          "call_to_action": "Press Next to write the first line."
+        },
+        {
           "id": "a1-s1",
           "kind": "SHOW",
-          "title": "Choose the rules of the world",
-          "teach": "A LAMMPS input script is read strictly top to bottom, and the order matters: some commands only work *before* the simulation box exists, others only after, and only a few work in both places. Rather than memorise that, the script is laid out in five labelled sections and filled in turn. Everything after a `#` is a comment.\n\nThis first section sets the global choices.\n\nStrictly speaking none of these four commands is mandatory -- each one matches a LAMMPS default. Writing them down anyway is considered good practice: the next person to read your script should not have to know what the defaults are, and defaults can change between versions.",
+          "title": "The unit system",
+          "teach": "The first section sets the global choices: the units, the dimensionality, what kind of particle you are simulating, and what happens at the edges of the box.\n\nStrictly speaking none of the four commands in this section is mandatory -- each one matches a LAMMPS default. Writing them down anyway is considered good practice: the next person to read your script should not have to know what the defaults are, and defaults can change between versions.",
           "doc_link": "units",
           "anchor": "editor",
           "section": "# 1) Initialization",
@@ -272,8 +280,8 @@
           "kind": "OBSERVE",
           "title": "The first number, and why it is positive",
           "anchor": "log",
-          "teach": "The Output window shows the total energy and pressure at step 0, as the thermodynamic data request asked.\n\nThe total energy is large and **positive**. That is expected, and it is the reason the next act exists. The atoms were placed at random, and `overlap 0.3` prevented only the very worst contacts -- 0.3 is still well inside σ for the heavy species. Plenty of pairs therefore sit on the steep repulsive branch of the potential, the r^{−12} term in the equation above, where the energy is enormous.",
-          "call_to_action": "Look at the etotal column in the Output window.",
+          "teach": "The Output window shows the total energy and pressure at step 0, as the thermodynamic data request asked. The columns are headed `TotEng` and `Press`: LAMMPS prints its own names for these quantities rather than echoing the `etotal` and `press` keywords you wrote.\n\nThe total energy is large and **positive**. That is expected, and it is the reason the next act exists. The atoms were placed at random, and `overlap 0.3` prevented only the very worst contacts -- 0.3 is still well inside σ for the heavy species. Plenty of pairs therefore sit on the steep repulsive branch of the potential, the r^{−12} term in the equation above, where the energy is enormous.",
+          "call_to_action": "Look at the TotEng column in the Output window.",
           "expect": "a large positive total energy"
         }
       ]
@@ -323,9 +331,9 @@
           "id": "a5-s4",
           "kind": "OBSERVE",
           "title": "See your system",
-          "anchor": "image",
-          "teach": "Create a snapshot of the current state and compare it with the system before minimization. The atoms are visibly clumping together as they move towards positions of lower potential energy.\n\nThe image viewer works by asking LAMMPS to render the current system with its own `dump image` machinery, so this is your system, not an illustration of one.",
-          "call_to_action": "Open the Image Viewer from the Run menu.",
+          "anchor": "snapshot",
+          "teach": "The snapshot button sits in the status bar, two along from Run. Press it to render the current state and compare it with the system before minimization. The atoms are visibly clumping together as they move towards positions of lower potential energy.\n\nThe image viewer works by asking LAMMPS to render the current system with its own `dump image` machinery, so this is your system, not an illustration of one.",
+          "call_to_action": "Press the snapshot button, two along from Run.",
           "expect": "atoms gathered into contact rather than scattered at random"
         }
       ]
@@ -344,7 +352,7 @@
           "anchor": "editor",
           "section": "# 4) Monitoring",
           "commands": [
-            { "text": "thermo 50", "typed": true,
+            { "text": "thermo 50",
               "explain": "Report less often now: this run is far longer than the minimization was. The command is the same one you used in Part A, with 50 in place of 10.",
               "concept": "thermo-output" },
             { "text": "thermo_style custom step temp etotal pe ke press",
@@ -396,21 +404,18 @@
           "title": "Nobody chose that temperature",
           "anchor": "chart",
           "teach": "After a few tens of thousands of steps both energies plateau and the total fluctuates around a constant value. That fluctuation, rather than a steady climb, is what a healthy NVE run looks like.\n\nThe temperature starts at zero and rises to a plateau of roughly 1.5. Nobody chose that number: it is whatever the potential energy released during equilibration happens to produce. Choosing the temperature is what a thermostat is for, and that comes next.",
-          "call_to_action": "Switch the Charts window between etotal, pe and ke.",
-          "expect": "a flat total energy with pe and ke trading against each other",
+          "call_to_action": "Switch the Charts window between TotEng, PotEng and KinEng.",
+          "expect": "a flat TotEng with PotEng and KinEng trading against each other",
           "checkpoint": true
         },
         {
           "id": "a6-s5",
           "kind": "SHOW",
           "title": "Choose the temperature instead of accepting it",
-          "teach": "A Langevin thermostat subjects the atoms to friction and to random noise, in the form of randomly added velocities. Because a constant friction term removes more kinetic energy from fast atoms and less from slow ones, the system reaches a dynamic equilibrium where the energy removed and added are about equal.\n\nWith a thermostat present the simulation is no longer microcanonical: it samples the canonical (NVT) ensemble.\n\nThe thermostat reaches its target quickly, so this run can be shorter than the one without it. Dial the step count down and apply it -- the control edits the `run` line that is already in your script.",
+          "teach": "A Langevin thermostat subjects the atoms to friction and to random noise, in the form of randomly added velocities. Because a constant friction term removes more kinetic energy from fast atoms and less from slow ones, the system reaches a dynamic equilibrium where the energy removed and added are about equal.\n\nWith a thermostat present the simulation is no longer microcanonical: it samples the canonical (NVT) ensemble.",
           "doc_link": "fix langevin",
           "anchor": "editor",
           "section": "# 5) Run",
-          "tune": { "command": "run", "arg": 1, "from": 25000, "to": 15000,
-                    "min": 5000, "max": 50000, "decimals": 0,
-                    "label": "Steps to run:" },
           "commands": [
             { "text": "fix mylgv all langevin 1.0 1.0 0.1 10917",
               "explain": "Add a Langevin thermostat to every atom, holding the temperature at 1.0 throughout the run.",
@@ -493,9 +498,10 @@
           "kind": "OBSERVE",
           "title": "Build it and save it",
           "anchor": "run",
-          "teach": "This run creates the file the next script reads. You can inspect it afterwards by right-clicking the file name in the editor and choosing to view it.",
+          "teach": "This run creates the file the next script reads. You can inspect it afterwards by right-clicking the file name in the editor and choosing to view it.\n\nThe tour waits here rather than moving on by itself: the next step opens a different script, and the charts from this run are worth a look first.",
           "call_to_action": "Press the Run button.",
           "expect": "improved.min.data appearing beside your script",
+          "wait_after_run": true,
           "checkpoint": true
         }
       ]
@@ -518,12 +524,13 @@
           "id": "a8-s2",
           "kind": "SHOW",
           "title": "Read the saved system",
-          "teach": "Two lines replace the whole System definition and Settings sections of the first script.",
+          "teach": "Two lines replace the whole System definition and Settings sections of the first script.\n\nThese are both new to you, so they are written out for you as usual. Read them before you accept them: `read_data` is the command that will start most of your own scripts from now on, and the order of these two lines is the point of this step.",
+          "call_to_action": "Read both lines, then press Tab to accept them.",
           "doc_link": "read_data",
           "anchor": "editor",
           "section": "# 2) System definition",
           "commands": [
-            { "text": "pair_style lj/cut 4.0", "typed": true,
+            { "text": "pair_style lj/cut 4.0",
               "explain": "The pair style must be set before the box exists. The data file carries the coefficients but not the style itself, so write the same `lj/cut` style with the same 4.0 cutoff you used in Part A.",
               "concept": "lj-cutoff" },
             { "text": "read_data improved.min.data",
@@ -613,7 +620,7 @@
           "section": "# 4) Monitoring",
           "commands": [
             { "text": "thermo_style custom step temp etotal v_n1_in v_n2_in c_sumcoor12",
-              "typed": true,
+             
               "explain": "A `custom` style listing, in order: `step`, `temp`, `etotal`, then your two variables and your compute. The `v_` prefix pulls in a variable and the `c_` prefix a compute, so `n1_in` becomes `v_n1_in` and `sumcoor12` becomes `c_sumcoor12`. That is what puts your own measurements alongside the standard quantities.",
               "concept": "thermo-output" }
           ]
@@ -639,7 +646,7 @@
               "concept": "fix-anatomy" },
             { "text": "fix mylgv all langevin 1.0 1.0 0.1 10917 zero yes", "together": true,
               "explain": "Thermostat at a constant temperature of 1.0. `zero yes` keeps the random thermostat forces from introducing a net momentum of their own." },
-            { "text": "timestep 0.005", "typed": true,
+            { "text": "timestep 0.005",
               "explain": "The same stable timestep you used in Part A: 0.005 reduced time units.",
               "concept": "timestep-stability" },
             { "text": "run 300000",
