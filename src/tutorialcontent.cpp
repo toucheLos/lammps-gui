@@ -105,7 +105,12 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("teach"),      QStringLiteral("doc_link"), QStringLiteral("commands"),
     QStringLiteral("section"),    QStringLiteral("expect"),   QStringLiteral("run_after_insert"),
     QStringLiteral("checkpoint"), QStringLiteral("anchor"),   QStringLiteral("call_to_action"),
-    QStringLiteral("open_file"),
+    QStringLiteral("open_file"),  QStringLiteral("tune"),
+};
+const QSet<QString> TUNE_KEYS = {
+    QStringLiteral("command"), QStringLiteral("arg"), QStringLiteral("from"),
+    QStringLiteral("to"),      QStringLiteral("min"), QStringLiteral("max"),
+    QStringLiteral("decimals"), QStringLiteral("label"),
 };
 const QSet<QString> COMMAND_KEYS = {
     QStringLiteral("text"),    QStringLiteral("explain"), QStringLiteral("notes"),
@@ -384,6 +389,37 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
         }
     }
 
+    QJsonObject tuneobj;
+    if (readObject(obj, QStringLiteral("tune"), path, ctx, tuneobj)) {
+        const QString tpath = sub(path, QStringLiteral("tune"));
+        ctx.checkKeys(tuneobj, TUNE_KEYS, tpath);
+        readString(tuneobj, QStringLiteral("command"), tpath, ctx, step.tune.command, true);
+        readInt(tuneobj, QStringLiteral("arg"), tpath, ctx, step.tune.argIndex);
+        readDouble(tuneobj, QStringLiteral("from"), tpath, ctx, step.tune.from);
+        readDouble(tuneobj, QStringLiteral("to"), tpath, ctx, step.tune.to);
+        readInt(tuneobj, QStringLiteral("decimals"), tpath, ctx, step.tune.decimals);
+        readString(tuneobj, QStringLiteral("label"), tpath, ctx, step.tune.label);
+        // the range brackets the two named values unless the content widens it,
+        // so a control is never born pointing outside its own bounds
+        step.tune.min = qMin(step.tune.from, step.tune.to);
+        step.tune.max = qMax(step.tune.from, step.tune.to);
+        readDouble(tuneobj, QStringLiteral("min"), tpath, ctx, step.tune.min);
+        readDouble(tuneobj, QStringLiteral("max"), tpath, ctx, step.tune.max);
+
+        if (step.tune.argIndex < 1)
+            ctx.error(sub(tpath, QStringLiteral("arg")),
+                      QStringLiteral("argument 0 is the command word itself; the first argument "
+                                     "that can be edited is 1"));
+        if (step.tune.min > step.tune.max)
+            ctx.error(sub(tpath, QStringLiteral("min")),
+                      QStringLiteral("the lower bound is above the upper bound"));
+        if (step.tune.from < step.tune.min || step.tune.from > step.tune.max ||
+            step.tune.to < step.tune.min || step.tune.to > step.tune.max)
+            ctx.error(sub(tpath, QStringLiteral("from")),
+                      QStringLiteral("\"from\" and \"to\" have to lie inside the range the user "
+                                     "is given, or the control cannot reach them"));
+    }
+
     QList<QJsonObject> cmds;
     QStringList cmdpaths;
     readObjectArray(obj, QStringLiteral("commands"), path, ctx, cmds, cmdpaths);
@@ -650,8 +686,15 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
     // which is exactly the state the field exists to prevent
     {
         QSet<QString> writtenSoFar;
+        QSet<QString> wordsSoFar;
         for (const auto &act : out.actlist)
-            for (const auto &step : act.steps)
+            for (const auto &step : act.steps) {
+                // a tune control edits a line that has to already be there
+                if (step.tune.isValid() && !wordsSoFar.contains(step.tune.command))
+                    ctx.error(QStringLiteral("acts"),
+                              QStringLiteral("step \"%1\" tunes \"%2\", which no earlier step "
+                                             "puts in the script")
+                                  .arg(step.id, step.tune.command));
                 for (const auto &cmd : step.commands) {
                     if (!cmd.replaces.isEmpty() && !writtenSoFar.contains(cmd.replaces))
                         ctx.error(QStringLiteral("acts"),
@@ -659,7 +702,9 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
                                                  "command writes")
                                       .arg(step.id, cmd.replaces));
                     writtenSoFar.insert(cmd.text);
+                    wordsSoFar.insert(cmd.text.section(QLatin1Char(' '), 0, 0));
                 }
+            }
     }
 
     // a step that hands the user the Run button has to come after something has

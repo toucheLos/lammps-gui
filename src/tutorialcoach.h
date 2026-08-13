@@ -12,10 +12,13 @@
 #ifndef TUTORIALCOACH_H
 #define TUTORIALCOACH_H
 
+#include "tutorialcontent.h"
+
 #include <QColor>
 #include <QRect>
 #include <QWidget>
 
+class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QTextBrowser;
@@ -166,6 +169,12 @@ public:
      */
     void setCallToAction(const QString &text);
 
+    /**
+     * @brief Show (or hide) the control for changing one command argument
+     * @param tune the control the step asks for; an invalid one hides the row
+     */
+    void setTune(const TuneControl &tune);
+
     /** @brief Enable or disable the Back button */
     void setBackEnabled(bool enable);
     /** @brief Set the Next button's label, so it can read "Done" at the end */
@@ -192,6 +201,12 @@ signals:
     /** @brief The user pressed Back */
     void backRequested();
 
+    /**
+     * @brief The user applied a new value for the step's tuned argument
+     * @param value the number now in the control
+     */
+    void tuneRequested(double value);
+
 protected:
     /** @brief Paint the panel background, border and pointer tail */
     void paintEvent(QPaintEvent *event) override;
@@ -203,6 +218,10 @@ private:
     QLabel *actionLabel     = nullptr; ///< what to do now
     QLabel *feedbackLabel   = nullptr; ///< response to a typed answer
     QLabel *progressLabel   = nullptr; ///< "step 4 of 21"
+    QWidget *tuneRow          = nullptr; ///< prompt + value + Apply, usually hidden
+    QLabel *tuneLabel         = nullptr; ///< prompt beside the value
+    QDoubleSpinBox *tuneValue = nullptr; ///< the value the user dials in
+    QPushButton *tuneApply    = nullptr; ///< writes it into the script
     QPushButton *backButton = nullptr; ///< step backwards
     QPushButton *nextButton = nullptr; ///< step forwards
 

@@ -29,6 +29,7 @@ TutorialView::TutorialView(TutorialEngine *engine, QWidget *host) :
 
     connect(coach, &TutorialCoach::nextRequested, this, &TutorialView::goNext);
     connect(coach, &TutorialCoach::backRequested, this, &TutorialView::goBack);
+    connect(coach, &TutorialCoach::tuneRequested, this, &TutorialView::applyTune);
     connect(engine, &TutorialEngine::stepChanged, this, &TutorialView::showCurrentStep);
 }
 
@@ -247,6 +248,10 @@ void TutorialView::showCurrentStep()
         coach->setCallToAction(step->callToAction);
     }
 
+    // a step that asks the user to change a number in a line already written
+    // carries the control to do it with
+    coach->setTune(step->tune);
+
     reposition();
 }
 
@@ -368,6 +373,19 @@ void TutorialView::goBack()
     // the step we land on replays from its first command, so its lines come out
     if (const TutorialStep *landing = engine->currentStep()) rewind(landing->id);
     showCurrentStep();
+}
+
+void TutorialView::applyTune(double value)
+{
+    const TutorialStep *step = engine->currentStep();
+    if (!step || !step->tune.isValid()) return;
+
+    // format at the control's own precision: writing 15000.000000 into a step
+    // count, or 0.0050000000000000001 into a timestep, is not what the user
+    // dialled in and not what the article shows
+    const QString text = QString::number(value, 'f', step->tune.decimals);
+    emit tuneParameter(step->tune.command, step->tune.argIndex, text);
+    coach->setFeedback(QStringLiteral("%1 is now %2.").arg(step->tune.command, text), true);
 }
 
 void TutorialView::retractSuperseded(const QList<CommandLine> &group)

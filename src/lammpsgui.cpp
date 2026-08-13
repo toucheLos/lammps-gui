@@ -608,6 +608,7 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
     connect(tutorialview, &TutorialView::retractCommand, textEdit, &CodeEditor::removeTutorialLine);
     connect(tutorialview, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);
+    connect(tutorialview, &TutorialView::tuneParameter, this, &LammpsGui::applyTutorialParameter);
     connect(tutorialview, &TutorialView::openFileRequested, this, &LammpsGui::openTutorialFile);
     connect(textEdit, &CodeEditor::pendingLineCommitted, tutorialview,
             &TutorialView::commandCommitted);

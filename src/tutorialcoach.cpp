@@ -13,6 +13,7 @@
 
 #include "constants.h"
 
+#include <QDoubleSpinBox>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -23,6 +24,8 @@
 #include <QPushButton>
 #include <QTextBrowser>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 TutorialSpotlight::TutorialSpotlight(QWidget *parent) : QWidget(parent)
 {
@@ -111,6 +114,25 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     feedbackLabel->hide();
     outer->addWidget(feedbackLabel);
 
+    // the tune row: a prompt, a value, and an Apply.  Hidden unless the step
+    // asks the user to change a number in a line that is already written.
+    tuneRow   = new QWidget(this);
+    auto *trl = new QHBoxLayout(tuneRow);
+    trl->setContentsMargins(0, 0, 0, 0);
+    tuneLabel = new QLabel(tuneRow);
+    tuneValue = new QDoubleSpinBox(tuneRow);
+    tuneValue->setKeyboardTracking(false);
+    tuneApply = new QPushButton(QStringLiteral("&Apply"), tuneRow);
+    trl->addWidget(tuneLabel);
+    trl->addWidget(tuneValue);
+    trl->addWidget(tuneApply);
+    trl->addStretch(1);
+    tuneRow->hide();
+    outer->addWidget(tuneRow);
+
+    connect(tuneApply, &QPushButton::clicked, this,
+            [this]() { emit tuneRequested(tuneValue->value()); });
+
     auto *row     = new QHBoxLayout;
     progressLabel = new QLabel(this);
     progressLabel->setFont(small);
@@ -152,6 +174,25 @@ void TutorialCoach::setCallToAction(const QString &text)
 {
     actionLabel->setText(text);
     actionLabel->setVisible(!text.isEmpty());
+}
+
+void TutorialCoach::setTune(const TuneControl &tune)
+{
+    if (!tune.isValid()) {
+        tuneRow->hide();
+        return;
+    }
+    tuneLabel->setText(tune.label.isEmpty()
+                           ? QStringLiteral("%1:").arg(tune.command)
+                           : tune.label);
+    // decimals first: setting it afterwards re-quantizes a value that has
+    // already been rounded to the old precision, which is how 0.005 once
+    // arrived in the box as 0.0100
+    tuneValue->setDecimals(tune.decimals);
+    tuneValue->setRange(tune.min, tune.max);
+    tuneValue->setSingleStep(tune.decimals > 0 ? std::pow(10.0, -tune.decimals) : 1.0);
+    tuneValue->setValue(tune.from);
+    tuneRow->show();
 }
 
 void TutorialCoach::setFeedback(const QString &text, bool ok)

@@ -405,13 +405,16 @@
           "id": "a6-s5",
           "kind": "SHOW",
           "title": "Choose the temperature instead of accepting it",
-          "teach": "A Langevin thermostat subjects the atoms to friction and to random noise, in the form of randomly added velocities. Because a constant friction term removes more kinetic energy from fast atoms and less from slow ones, the system reaches a dynamic equilibrium where the energy removed and added are about equal.\n\nWith a thermostat present the simulation is no longer microcanonical: it samples the canonical (NVT) ensemble.",
+          "teach": "A Langevin thermostat subjects the atoms to friction and to random noise, in the form of randomly added velocities. Because a constant friction term removes more kinetic energy from fast atoms and less from slow ones, the system reaches a dynamic equilibrium where the energy removed and added are about equal.\n\nWith a thermostat present the simulation is no longer microcanonical: it samples the canonical (NVT) ensemble.\n\nThe thermostat reaches its target quickly, so this run can be shorter than the one without it. Dial the step count down and apply it -- the control edits the `run` line that is already in your script.",
           "doc_link": "fix langevin",
           "anchor": "editor",
           "section": "# 5) Run",
+          "tune": { "command": "run", "arg": 1, "from": 25000, "to": 15000,
+                    "min": 5000, "max": 50000, "decimals": 0,
+                    "label": "Steps to run:" },
           "commands": [
             { "text": "fix mylgv all langevin 1.0 1.0 0.1 10917",
-              "explain": "Add a Langevin thermostat to every atom, holding the temperature at 1.0 throughout the run. Shorten the run to 15000 steps when you try it.",
+              "explain": "Add a Langevin thermostat to every atom, holding the temperature at 1.0 throughout the run.",
               "concept": "fix-anatomy",
               "notes": [
                 { "arg": 4, "note": "the target temperature at the start of the run, then at the end",
@@ -667,7 +670,10 @@
           "kind": "OBSERVE",
           "title": "It is yours now",
           "anchor": "editor",
-          "teach": "Three things worth trying, each one number.\n\n**Raise the timestep** to 0.05 and re-run. The total energy climbs without bound, and the run may stop with **ERROR: Lost atoms**. The integrator has stepped an atom straight through its neighbour's repulsive core; it almost never means atoms were really lost, it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nAll the runs in these tutorials are deliberately kept short so they finish on a personal computer. None of them is long enough to produce statistically meaningful results.",
+          "teach": "Three things worth trying, each one number.\n\n**Raise the timestep.** The control below edits the `timestep` line in your script. Take it to 0.05 and run again: the total energy climbs without bound, and the run may stop with **ERROR: Lost atoms**. The integrator has stepped an atom straight through its neighbour's repulsive core; it almost never means atoms were really lost, it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nAll the runs in these tutorials are deliberately kept short so they finish on a personal computer. None of them is long enough to produce statistically meaningful results.",
+          "tune": { "command": "timestep", "arg": 1, "from": 0.005, "to": 0.05,
+                    "min": 0.001, "max": 0.1, "decimals": 3,
+                    "label": "Timestep:" },
           "call_to_action": "Change something and run it again."
         }
       ]

@@ -123,6 +123,29 @@ struct CommandLine {
 };
 
 /**
+ * @brief A control that lets the step change one argument of one command
+ *
+ * The tour otherwise only writes whole lines.  A tutorial that says "raise the
+ * timestep and watch it go unstable" is asking the user to change a number in a
+ * line that is already there, and reading about it is not the same as doing it.
+ * The control edits exactly that one argument, leaving the rest of the line --
+ * spacing, alignment, any trailing comment -- untouched.
+ */
+struct TuneControl {
+    QString command;   ///< command word whose line is edited, e.g. "timestep"
+    int argIndex = 1;  ///< 1-based argument to rewrite
+    double from  = 0;  ///< value the script holds now; seeds the control
+    double to    = 0;  ///< value the step is steering towards
+    double min   = 0;  ///< lowest the user may dial in
+    double max   = 0;  ///< highest the user may dial in
+    int decimals = 0;  ///< digits after the point, 0 for an integer argument
+    QString label;     ///< prompt shown beside the control
+
+    /// a step carries one only if it names a command to edit
+    bool isValid() const { return !command.isEmpty(); }
+};
+
+/**
  * @brief One step of a tutorial
  */
 struct TutorialStep {
@@ -151,6 +174,9 @@ struct TutorialStep {
 
     bool runAfterInsert = false; ///< Show: offer a run once the lines are in
     bool checkpoint     = false; ///< a milestone worth pausing on
+
+    /// optional control for changing one argument of an existing line
+    TuneControl tune;
 };
 
 /**

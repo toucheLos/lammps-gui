@@ -537,6 +537,84 @@ TEST(TutorialContentTest, ATypedCommandCannotAlsoBeGrouped)
         << qPrintable(formatContentIssues(issues));
 }
 
+// A tune control edits an argument of a line the script already holds, so the
+// command has to have been written and the two named values have to be
+// reachable with the control the user is given.
+TEST(TutorialContentTest, TuneNeedsAnEarlierCommandAndAReachableRange)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "run 25000", "explain": "dynamics" } ] },
+        { "id": "s2", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "editor",
+          "tune": { "command": "run", "arg": 1, "from": 25000, "to": 15000,
+                    "min": 5000, "max": 50000, "label": "Steps:" } } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    const TutorialStep *step = content.step(0, 1);
+    ASSERT_NE(step, nullptr);
+    EXPECT_TRUE(step->tune.isValid());
+    EXPECT_EQ(step->tune.command, QStringLiteral("run"));
+    EXPECT_EQ(step->tune.argIndex, 1);
+    // a step without one carries an invalid control rather than a null pointer
+    EXPECT_FALSE(content.step(0, 0)->tune.isValid());
+
+    // tuning a command nothing has written
+    const QByteArray unwritten = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "editor",
+          "tune": { "command": "timestep", "arg": 1, "from": 1, "to": 2 } } ] } ]
+    })";
+    QList<ContentIssue> unwrittenIssues;
+    parseTutorialJson(unwritten, &unwrittenIssues);
+    EXPECT_GT(countContentErrors(unwrittenIssues), 0);
+    EXPECT_TRUE(
+        formatContentIssues(unwrittenIssues).contains(QStringLiteral("no earlier step")))
+        << qPrintable(formatContentIssues(unwrittenIssues));
+
+    // a target the control cannot reach
+    const QByteArray unreachable = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "run 25000", "explain": "dynamics" } ] },
+        { "id": "s2", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "editor",
+          "tune": { "command": "run", "arg": 1, "from": 25000, "to": 15000,
+                    "min": 20000, "max": 50000 } } ] } ]
+    })";
+    QList<ContentIssue> rangeIssues;
+    parseTutorialJson(unreachable, &rangeIssues);
+    EXPECT_GT(countContentErrors(rangeIssues), 0);
+    EXPECT_TRUE(formatContentIssues(rangeIssues).contains(QStringLiteral("cannot reach")))
+        << qPrintable(formatContentIssues(rangeIssues));
+}
+
+// Argument 0 is the command word; editing it would rewrite the command itself.
+TEST(TutorialContentTest, TuneCannotTargetTheCommandWord)
+{
+    const QByteArray doc = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "run 25000", "explain": "dynamics" } ] },
+        { "id": "s2", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "editor",
+          "tune": { "command": "run", "arg": 0, "from": 1, "to": 2, "max": 3 } } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    parseTutorialJson(doc, &issues);
+    EXPECT_GT(countContentErrors(issues), 0);
+    EXPECT_TRUE(formatContentIssues(issues).contains(QStringLiteral("command word itself")))
+        << qPrintable(formatContentIssues(issues));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

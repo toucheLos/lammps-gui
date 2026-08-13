@@ -112,6 +112,17 @@ signals:
     void insertCommand(const QString &text, const QString &section);
 
     /**
+     * @brief Rewrite one argument of a command already in the script
+     * @param command the command word whose line is edited
+     * @param argIndex 1-based argument to replace
+     * @param value the new value, formatted at the control's precision
+     *
+     * Routed to LammpsGui::applyTutorialParameter(), which splices over the
+     * argument's character span so the rest of the line survives untouched.
+     */
+    void tuneParameter(const QString &command, int argIndex, const QString &value);
+
+    /**
      * @brief Open a different input file
      * @param name file name relative to the tutorial's working directory
      */
@@ -151,6 +162,7 @@ public slots:
 private slots:
     void goNext(); ///< advance, withdrawing anything uncommitted
     void goBack(); ///< step back, withdrawing anything uncommitted
+    void applyTune(double value); ///< write the tuned value into the script
 
 private:
     /// render the markdown subset (bold, italic, inline code) as rich text
