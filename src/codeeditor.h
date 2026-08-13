@@ -159,6 +159,15 @@ public:
     bool hasPendingLine() const { return pendingLine >= 0; }
 
     /**
+     * @brief Whether the cursor sits inside the pending group
+     *
+     * A group spans several blocks and setPendingLines() leaves the cursor on
+     * the last of them, so "is the cursor on the pending line" has to mean the
+     * whole span rather than its first block.
+     */
+    bool onPendingLine() const;
+
+    /**
      * @brief Write a set of section headings into an empty buffer
      * @param lines the headings, in order
      *
@@ -184,6 +193,9 @@ signals:
      *        themselves is what they actually wrote
      */
     void pendingLineCommitted(const QString &text);
+
+    /** @brief Shift+Tab was pressed while a tutorial had a line pending */
+    void tutorialBackRequested();
 
 public:
     /**

@@ -272,6 +272,13 @@ bool CodeEditor::removeTutorialLine(const QString &text)
     return false;
 }
 
+bool CodeEditor::onPendingLine() const
+{
+    if (pendingLine < 0) return false;
+    const int block = textCursor().blockNumber();
+    return block >= pendingLine && block < pendingLine + qMax(pendingCount, 1);
+}
+
 QRect CodeEditor::pendingLineArea() const
 {
     const int target       = pendingLine >= 0 ? pendingLine : textCursor().blockNumber();
@@ -577,17 +584,32 @@ void CodeEditor::keyPressEvent(QKeyEvent *event)
         }
     }
 
-    // Tab accepts a line an interactive tutorial has offered, but only while
-    // one is pending and the cursor is actually on it.  Everywhere else -- and
-    // whenever no tutorial is running -- Tab still reformats the current line.
-    if (key == Qt::Key_Tab && pendingLine >= 0 && textCursor().blockNumber() == pendingLine) {
-        commitPendingLine();
+    // Tab accepts the lines an interactive tutorial has offered, but only while
+    // a group is pending and the cursor is somewhere inside it.  Everywhere
+    // else -- and whenever no tutorial is running -- Tab still reformats the
+    // current line.
+    //
+    // Both halves of this used to be wrong for a group of more than one line.
+    // setPendingLines() leaves the cursor on the *last* line of the group, so
+    // comparing against the first line's number never matched and Tab silently
+    // reformatted instead; and commitPendingLine() would have accepted only the
+    // first line of the group in any case.
+    if (key == Qt::Key_Tab && onPendingLine()) {
+        commitPendingLines();
         return;
     }
 
     // reformat current line and consume key event
     if (key == Qt::Key_Tab) {
         reformatCurrentLine();
+        return;
+    }
+
+    // Shift+Tab steps an interactive tutorial backwards, so the keyboard can
+    // drive the tour in both directions without reaching for the callout.  With
+    // no tutorial running it keeps its usual meaning.
+    if (key == Qt::Key_Backtab && pendingLine >= 0) {
+        emit tutorialBackRequested();
         return;
     }
 

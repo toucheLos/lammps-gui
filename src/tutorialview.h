@@ -159,9 +159,11 @@ public slots:
      */
     void runFinished(bool success);
 
+    /** @brief Step the tour back; bound to Shift+Tab in the editor */
+    void goBack();
+
 private slots:
     void goNext(); ///< advance, withdrawing anything uncommitted
-    void goBack(); ///< step back, withdrawing anything uncommitted
     void applyTune(double value); ///< write the tuned value into the script
 
 private:

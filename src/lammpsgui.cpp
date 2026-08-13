@@ -610,6 +610,9 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     connect(tutorialview, &TutorialView::openFileRequested, this, &LammpsGui::openTutorialFile);
     connect(textEdit, &CodeEditor::pendingLineCommitted, tutorialview,
             &TutorialView::commandCommitted);
+    // Tab accepts, Shift+Tab steps back: the tour is drivable from the keyboard
+    // without leaving the line being written
+    connect(textEdit, &CodeEditor::tutorialBackRequested, tutorialview, &TutorialView::goBack);
     connect(tutorialengine, &TutorialEngine::stepChanged, tutorialengine,
             &TutorialEngine::saveProgress);
     // a step that points at the Run button waits for the run rather than for Next
