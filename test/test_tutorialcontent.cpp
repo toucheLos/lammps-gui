@@ -630,6 +630,44 @@ TEST(TutorialContentTest, TuneCannotTargetTheCommandWord)
         << qPrintable(formatContentIssues(issues));
 }
 
+// "section" files a step's commands under a heading; "before" files them above
+// a named line.  They are two answers to the same question, and a step that
+// gives both leaves the editor to pick one silently.
+TEST(TutorialContentTest, SectionAndBeforeAreMutuallyExclusive)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t",
+          "before": "run 0 post no",
+          "commands": [ { "text": "group carbon_atoms type 1", "explain": "all" } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    EXPECT_TRUE(issues.isEmpty()) << qPrintable(formatContentIssues(issues));
+    const TutorialStep *step = content.step(0, 0);
+    ASSERT_NE(step, nullptr);
+    EXPECT_EQ(step->before, QStringLiteral("run 0 post no"));
+    EXPECT_TRUE(step->section.isEmpty());
+
+    const QByteArray both = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "skeleton": [ "# 5) Run" ],
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t",
+          "section": "# 5) Run", "before": "run 0 post no",
+          "commands": [ { "text": "group carbon_atoms type 1", "explain": "all" } ] } ] } ]
+    })";
+    QList<ContentIssue> bothIssues;
+    parseTutorialJson(both, &bothIssues);
+    EXPECT_GT(countContentErrors(bothIssues), 0);
+    EXPECT_TRUE(formatContentIssues(bothIssues).contains(QStringLiteral("not both")))
+        << qPrintable(formatContentIssues(bothIssues));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

@@ -108,7 +108,7 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("section"),    QStringLiteral("expect"),   QStringLiteral("run_after_insert"),
     QStringLiteral("checkpoint"), QStringLiteral("anchor"),   QStringLiteral("call_to_action"),
     QStringLiteral("open_file"),  QStringLiteral("tune"),
-    QStringLiteral("wait_after_run"),
+    QStringLiteral("wait_after_run"), QStringLiteral("before"),
 };
 const QSet<QString> TUNE_KEYS = {
     QStringLiteral("command"), QStringLiteral("arg"), QStringLiteral("from"),
@@ -363,6 +363,12 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("call_to_action"), path, ctx, step.callToAction);
     readString(obj, QStringLiteral("open_file"), path, ctx, step.openFile);
     readString(obj, QStringLiteral("section"), path, ctx, step.section);
+    readString(obj, QStringLiteral("before"), path, ctx, step.before);
+    // two answers to the same question: where do this step's commands go?
+    if (!step.section.isEmpty() && !step.before.isEmpty())
+        ctx.error(sub(path, QStringLiteral("before")),
+                  QStringLiteral("a step files its commands under a heading or above a named "
+                                 "line, not both"));
 
     QString anchorstr;
     if (readString(obj, QStringLiteral("anchor"), path, ctx, anchorstr))

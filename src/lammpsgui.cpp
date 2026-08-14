@@ -734,14 +734,16 @@ void LammpsGui::applyTutorialParameter(const QString &command, int argIndex, con
     textEdit->setHighlight(lineNumber, false);
 }
 
-void LammpsGui::appendTutorialCommand(const QString &text, const QString &section)
+void LammpsGui::appendTutorialCommand(const QString &text, const QString &section,
+                                      const QString &before)
 {
     if (text.trimmed().isEmpty()) return;
 
     // reuse the pending-line machinery so the command lands under its own
-    // section heading, then accept it immediately: this path is for lines the
-    // user chose to skip past rather than type
-    textEdit->setPendingLine(text, section);
+    // section heading -- or above the line it belongs before -- then accept it
+    // immediately: this path is for lines the user chose to skip past rather
+    // than type
+    textEdit->setPendingLine(text, section, before);
     textEdit->commitPendingLine();
 }
 

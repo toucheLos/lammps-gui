@@ -194,7 +194,7 @@ void CodeEditor::seedSkeleton(const QStringList &lines)
     setPlainText(lines.join(QLatin1Char('\n')));
 }
 
-void CodeEditor::setPendingLine(const QString &text, const QString &section)
+void CodeEditor::setPendingLine(const QString &text, const QString &section, const QString &before)
 {
     clearPendingLine();
     pendingCount = 1;
@@ -202,7 +202,34 @@ void CodeEditor::setPendingLine(const QString &text, const QString &section)
     // user to type into, which is how a tutorial asks for a command rather than
     // handing it over
 
-    auto cursor     = textCursor();
+    auto cursor = textCursor();
+
+    // A tutorial whose input file arrives complete rather than as a skeleton
+    // has to grow it from the middle: the lines belong above the run command
+    // that is already the last thing in the file.  Repeated insertions stack in
+    // order, each one landing just above the same target line.
+    if (!before.isEmpty()) {
+        for (QTextBlock b = document()->begin(); b.isValid(); b = b.next()) {
+            if (b.text().trimmed() != before.trimmed()) continue;
+            // read the number *before* inserting: a QTextBlock handle tracks
+            // its position, so afterwards it reports where the target line has
+            // been pushed to rather than where the new line landed, and the
+            // pending index ends up one line high -- pointing at whatever the
+            // file already had above it
+            const int target = b.blockNumber();
+            cursor           = QTextCursor(b);
+            cursor.movePosition(QTextCursor::StartOfBlock);
+            cursor.insertText(text + QStringLiteral("\n"));
+            pendingLine = target;
+            setTextCursor(QTextCursor(document()->findBlockByNumber(pendingLine)));
+            ensureCursorVisible();
+            viewport()->update();
+            return;
+        }
+        // the named line is not there: fall through and append, which at least
+        // puts the command in the script rather than dropping it silently
+    }
+
     int insertAfter = -1;
     if (!section.isEmpty()) {
         // file the line under its own heading, and after anything already
@@ -315,15 +342,16 @@ QRect CodeEditor::pendingLineArea() const
     return area.intersected(viewport()->rect());
 }
 
-void CodeEditor::setPendingLines(const QStringList &lines, const QString &section)
+void CodeEditor::setPendingLines(const QStringList &lines, const QString &section,
+                                 const QString &before)
 {
     if (lines.isEmpty()) {
-        setPendingLine(QString(), section);
+        setPendingLine(QString(), section, before);
         return;
     }
     // place the first line the usual way, then append the rest below it: the
     // whole group ends up contiguous and highlighted together
-    setPendingLine(lines.first(), section);
+    setPendingLine(lines.first(), section, before);
     if (pendingLine < 0) return;
 
     QTextBlock block = document()->findBlockByNumber(pendingLine);

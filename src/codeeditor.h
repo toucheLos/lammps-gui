@@ -118,7 +118,8 @@ public:
      * cursor on it commits it; clearPendingLine() withdraws it again.  Only
      * one line can be pending at a time; offering a second withdraws the first.
      */
-    void setPendingLine(const QString &text, const QString &section = QString());
+    void setPendingLine(const QString &text, const QString &section = QString(),
+                        const QString &before = QString());
 
     /**
      * @brief Offer several lines at once, as one highlighted group
@@ -129,7 +130,8 @@ public:
      * whole group is highlighted before any of it is committed and nothing can
      * arrive in the script without having been visible first.
      */
-    void setPendingLines(const QStringList &lines, const QString &section = QString());
+    void setPendingLines(const QStringList &lines, const QString &section = QString(),
+                         const QString &before = QString());
 
     /**
      * @brief Accept the pending line, leaving it in the buffer

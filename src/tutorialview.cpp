@@ -289,11 +289,11 @@ void TutorialView::showCurrentStep()
         if (anyTyped) {
             // reinforcement: described but never written, so the user produces
             // it themselves.  A blank pending line marks where it goes.
-            emit offerCommands(QStringList(), step->section);
+            emit offerCommands(QStringList(), step->section, step->before);
             coach->setCallToAction(
                 QStringLiteral("Type it yourself on the highlighted line, then press Tab."));
         } else {
-            emit offerCommands(texts, step->section);
+            emit offerCommands(texts, step->section, step->before);
             // a step that has something particular to say about accepting these
             // lines says it; otherwise the generic prompt, which is right almost
             // everywhere and would be tedious to repeat in the content
@@ -356,7 +356,8 @@ void TutorialView::commandCommitted(const QString &written)
             // wrote, and a retry must not leave a dead line behind each time
             const InsertGuard guard(inserting);
             emit retractCommand(written);
-            emit offerCommands(QStringList() << written, engine->currentStep()->section);
+            emit offerCommands(QStringList() << written, engine->currentStep()->section,
+                               engine->currentStep()->before);
             return;
         }
         coach->setFeedback(QStringLiteral("That is it."), true);
@@ -432,7 +433,8 @@ void TutorialView::goNext()
         const InsertGuard guard(inserting);
         retractSuperseded(group);
         for (const auto &text : texts)
-            emit insertCommand(text, step ? step->section : QString());
+            emit insertCommand(text, step ? step->section : QString(),
+                               step ? step->before : QString());
         if (!engine->allCommandsInserted()) {
             showCurrentStep();
             return;
@@ -499,7 +501,8 @@ void TutorialView::rewind(const QString &stepId)
     // of Next rather than a one-way trim of the script
     const TutorialStep *step = engine->content().stepById(stepId);
     for (const auto &text : engine->replacedFor(stepId))
-        emit insertCommand(text, step ? step->section : QString());
+        emit insertCommand(text, step ? step->section : QString(),
+                               step ? step->before : QString());
     engine->forgetReplaced(stepId);
 }
 

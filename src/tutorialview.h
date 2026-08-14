@@ -99,17 +99,19 @@ signals:
      * Pending means visible and highlighted but not yet accepted; the user
      * commits it with Tab, or it is withdrawn when they move on.
      */
-    void offerCommand(const QString &text, const QString &section);
+    void offerCommand(const QString &text, const QString &section, const QString &before);
 
     /**
      * @brief Offer a whole group of commands at once
      * @param texts the commands, in order; empty offers one blank line
      * @param section heading to file them under
+     * @param before line to file them immediately above, for a script that
+     *        arrives complete rather than as a skeleton
      *
      * Commands serving one purpose are shown, highlighted and accepted
      * together, so nothing reaches the script without being visible first.
      */
-    void offerCommands(const QStringList &texts, const QString &section);
+    void offerCommands(const QStringList &texts, const QString &section, const QString &before);
 
     /** @brief Withdraw a pending command that was never committed */
     void withdrawCommand();
@@ -127,7 +129,7 @@ signals:
      * Used when the user skips ahead: the remaining lines of the step still
      * have to reach the script, or what they run next would not work.
      */
-    void insertCommand(const QString &text, const QString &section);
+    void insertCommand(const QString &text, const QString &section, const QString &before);
 
     /**
      * @brief Rewrite one argument of a command already in the script

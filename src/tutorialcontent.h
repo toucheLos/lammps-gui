@@ -161,6 +161,12 @@ struct TutorialStep {
     /// comment line this step's commands belong under, e.g. "# 2) System
     /// definition"; empty appends at the end of the buffer
     QString section;
+    /// line this step's commands belong immediately *above*.  For a tutorial
+    /// whose input file arrives complete rather than as a skeleton, the new
+    /// lines go into the middle of an existing script -- above the `run`
+    /// command that is already its last line -- and there are no headings to
+    /// file them under.  Mutually exclusive with @ref section.
+    QString before;
     QList<CommandLine> commands; ///< the lines to present and insert
     /// what the user should see once they act; shown after the run rather than
     /// before it, so it reads as an observation and not as an instruction
