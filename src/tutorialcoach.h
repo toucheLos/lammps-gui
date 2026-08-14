@@ -177,6 +177,15 @@ public:
 
     /** @brief Enable or disable the Back button */
     void setBackEnabled(bool enable);
+    /**
+     * @brief Show an extra button to the left of Back, or hide it
+     * @param text label for the button; empty hides it
+     *
+     * Used only by the completion panel, which has one more thing to offer
+     * than Back and Done.
+     */
+    void setExtraButton(const QString &text);
+
     /** @brief Set the Next button's label, so it can read "Done" at the end */
     void setNextText(const QString &text);
     /** @brief Enable or disable the Next button */
@@ -212,6 +221,9 @@ signals:
     /** @brief The user pressed Back */
     void backRequested();
 
+    /** @brief The user pressed the extra button on the completion panel */
+    void extraRequested();
+
     /**
      * @brief The user applied a new value for the step's tuned argument
      * @param value the number now in the control
@@ -233,6 +245,7 @@ private:
     QLabel *tuneLabel         = nullptr; ///< prompt beside the value
     QDoubleSpinBox *tuneValue = nullptr; ///< the value the user dials in
     QPushButton *tuneApply    = nullptr; ///< writes it into the script
+    QPushButton *extraButton = nullptr; ///< completion panel only; usually hidden
     QPushButton *backButton = nullptr; ///< step backwards
     QPushButton *nextButton = nullptr; ///< step forwards
 

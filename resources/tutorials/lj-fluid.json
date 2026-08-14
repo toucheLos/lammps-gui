@@ -677,10 +677,7 @@
           "kind": "OBSERVE",
           "title": "It is yours now",
           "anchor": "editor",
-          "teach": "Three things worth trying, each one number.\n\n**Raise the timestep.** The control below edits the `timestep` line in your script. Take it to 0.05 and run again: the total energy climbs without bound, and the run may stop with **ERROR: Lost atoms**. The integrator has stepped an atom straight through its neighbour's repulsive core; it almost never means atoms were really lost, it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nAll the runs in these tutorials are deliberately kept short so they finish on a personal computer. None of them is long enough to produce statistically meaningful results.",
-          "tune": { "command": "timestep", "arg": 1, "from": 0.005, "to": 0.05,
-                    "min": 0.001, "max": 0.1, "decimals": 3,
-                    "label": "Timestep:" },
+          "teach": "Three things worth trying, each one number.\n\n**Raise the timestep** to 0.05 and run again: the total energy climbs without bound, and the run may stop with **ERROR: Lost atoms**. The integrator has stepped an atom straight through its neighbour's repulsive core; it almost never means atoms were really lost, it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nAll the runs in these tutorials are deliberately kept short so they finish on a personal computer. None of them is long enough to produce statistically meaningful results.",
           "call_to_action": "Change something and run it again."
         }
       ]

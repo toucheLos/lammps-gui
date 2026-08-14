@@ -141,15 +141,19 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     auto *row     = new QHBoxLayout;
     progressLabel = new QLabel(this);
     progressLabel->setFont(small);
+    extraButton = new QPushButton(this);
+    extraButton->hide();
     backButton = new QPushButton(QStringLiteral("< &Back"), this);
     nextButton = new QPushButton(QStringLiteral("&Next >"), this);
     nextButton->setDefault(true);
     row->addWidget(progressLabel);
     row->addStretch(1);
+    row->addWidget(extraButton);
     row->addWidget(backButton);
     row->addWidget(nextButton);
     outer->addLayout(row);
 
+    connect(extraButton, &QPushButton::clicked, this, &TutorialCoach::extraRequested);
     connect(backButton, &QPushButton::clicked, this, &TutorialCoach::backRequested);
     connect(nextButton, &QPushButton::clicked, this, &TutorialCoach::nextRequested);
 
@@ -217,6 +221,12 @@ void TutorialCoach::setFeedback(const QString &text, bool ok)
 void TutorialCoach::setBackEnabled(bool enable)
 {
     backButton->setEnabled(enable);
+}
+
+void TutorialCoach::setExtraButton(const QString &text)
+{
+    extraButton->setText(text);
+    extraButton->setVisible(!text.isEmpty());
 }
 
 void TutorialCoach::setNextText(const QString &text)

@@ -633,6 +633,21 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     // Tab accepts, Shift+Tab steps back: the tour is drivable from the keyboard
     // without leaving the line being written
     connect(textEdit, &CodeEditor::tutorialBackRequested, tutorialview, &TutorialView::goBack);
+    connect(tutorialview, &TutorialView::closeRequested, this, &LammpsGui::closeInteractiveTutorial);
+    connect(tutorialview, &TutorialView::nextTutorialRequested, this, [this, content]() {
+        const int c = collectionIndexFor(content.collection());
+        closeInteractiveTutorial();
+        if (c >= 0) startTutorial(c, content.tutorialNumber() + 1);
+    });
+
+    // the completion panel offers whatever comes next, when there is one to
+    // offer: it has to exist in the collection, be released, and have a tour
+    const int coll = collectionIndexFor(content.collection());
+    const int next = content.tutorialNumber() + 1;
+    if (coll >= 0 && next <= tutorialCollection(coll).available &&
+        !interactiveContentFor(coll, next).isEmpty())
+        tutorialview->setNextTutorialLabel(
+            QString("Start Tutorial &%1 >").arg(next));
     connect(tutorialengine, &TutorialEngine::stepChanged, tutorialengine,
             &TutorialEngine::saveProgress);
     // a step that points at the Run button waits for the run rather than for Next
@@ -647,6 +662,33 @@ void LammpsGui::raiseTutorialOverlay()
     // so anything raised above them hides them.  Repositioning re-raises both
     // and re-resolves the anchor, which is what a view appearing changes.
     if (tutorialview) tutorialview->reposition();
+}
+
+int LammpsGui::collectionIndexFor(const QString &key) const
+{
+    const auto &collections = tutorialCollections();
+    for (int i = 0; i < collections.size(); ++i)
+        if (collections.at(i).key == key) return i;
+    return -1;
+}
+
+void LammpsGui::closeInteractiveTutorial()
+{
+    // The tour is ended from a button on the callout, and the callout belongs
+    // to the view, so deleting the view here would destroy the widget whose
+    // click is still being dispatched.  Hide now, delete once the event loop
+    // comes back round.
+    if (tutorialview) {
+        tutorialview->stop();
+        tutorialview->deleteLater();
+        tutorialview = nullptr;
+    }
+    if (tutorialengine) {
+        tutorialengine->deleteLater();
+        tutorialengine = nullptr;
+    }
+    // the script the user built is theirs and is left exactly as it is;
+    // progress was persisted on every step change, so the tutorial resumes
 }
 
 void LammpsGui::openTutorialFile(const QString &name)

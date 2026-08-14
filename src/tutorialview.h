@@ -73,6 +73,24 @@ public:
     /** @brief Show the coach mark and display the current step */
     void start();
 
+    /**
+     * @brief Label for the completion panel's extra button
+     * @param label e.g. "Start Tutorial &2"; empty offers nothing
+     *
+     * The view has no idea what tutorials exist or which of them are
+     * available, so the caller supplies the offer.
+     */
+    void setNextTutorialLabel(const QString &label) { nextLabel = label; }
+
+    /**
+     * @brief Take the coach mark off the screen without destroying anything
+     *
+     * The tour is usually ended from a button *on* the callout, so the object
+     * that owns that button cannot be deleted there and then.  Hiding is
+     * immediate; the deletion follows through the event loop.
+     */
+    void stop();
+
 signals:
     /**
      * @brief Put the step's command into the editor as a pending line
@@ -133,6 +151,12 @@ signals:
 
     /** @brief The tour reached its end */
     void finished();
+
+    /** @brief The user pressed Done and wants the tour taken off the screen */
+    void closeRequested();
+
+    /** @brief The user asked for the tutorial after this one */
+    void nextTutorialRequested();
 
 public slots:
     /** @brief Rebuild the callout from the engine's cursor */
@@ -201,6 +225,7 @@ private:
         bool &ref; ///< the flag being held true
     };
 
+    QString nextLabel;                        ///< completion panel's extra button, if any
     bool inserting         = false;           ///< true while the tour writes its own lines
     TutorialEngine *engine = nullptr;         ///< drives the tutorial (not owned)
     QWidget *host          = nullptr;         ///< main window (not owned)

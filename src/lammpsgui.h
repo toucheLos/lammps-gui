@@ -647,6 +647,21 @@ private:
     void startInteractiveTutorial(const QString &path);
 
     /**
+     * @brief Take the interactive tutorial off the screen
+     *
+     * Ends the tour without touching the script the user has built.  Progress
+     * is persisted on every step change, so the tutorial can be resumed later.
+     */
+    void closeInteractiveTutorial();
+
+    /**
+     * @brief Index of a tutorial collection by its key
+     * @param key collection key, e.g. "softmatter"
+     * @return index into tutorialCollections(), or -1 when unknown
+     */
+    int collectionIndexFor(const QString &key) const;
+
+    /**
      * @brief Record the input file a tutorial was set up with
      * @param collection Index of the tutorial collection
      * @param tutno 1-based tutorial number

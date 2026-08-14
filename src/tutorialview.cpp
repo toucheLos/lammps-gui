@@ -30,6 +30,7 @@ TutorialView::TutorialView(TutorialEngine *engine, QWidget *host) :
     connect(coach, &TutorialCoach::nextRequested, this, &TutorialView::goNext);
     connect(coach, &TutorialCoach::backRequested, this, &TutorialView::goBack);
     connect(coach, &TutorialCoach::tuneRequested, this, &TutorialView::applyTune);
+    connect(coach, &TutorialCoach::extraRequested, this, &TutorialView::nextTutorialRequested);
     connect(engine, &TutorialEngine::stepChanged, this, &TutorialView::showCurrentStep);
 }
 
@@ -58,6 +59,12 @@ void TutorialView::start()
     coach->show();
     coach->raise();
     showCurrentStep();
+}
+
+void TutorialView::stop()
+{
+    if (spotlight) spotlight->hide();
+    if (coach) coach->hide();
 }
 
 /* -------------------------------------------------------------------- */
@@ -202,6 +209,9 @@ void TutorialView::showCurrentStep()
         coach->setProgress(engine->content().stepCount(), engine->content().stepCount());
         coach->setNextText(QStringLiteral("&Done"));
         coach->setNextEnabled(true);
+        // the caller decides whether there is a next tutorial to offer, and
+        // what it is called; an empty label hides the button
+        coach->setExtraButton(nextLabel);
         coach->setBackEnabled(true);
         reposition();
         emit finished();
@@ -215,6 +225,7 @@ void TutorialView::showCurrentStep()
     coach->setProgress(engine->stepsCompleted() + 1, engine->content().stepCount());
     coach->setBackEnabled(engine->stepsCompleted() > 0);
     coach->setNextText(QStringLiteral("&Next >"));
+    coach->setExtraButton(QString());
     coach->setNextEnabled(true);
     coach->setFeedback(QString(), true);
 
@@ -393,6 +404,15 @@ void TutorialView::runFinished(bool success)
 
 void TutorialView::goNext()
 {
+    // on the completion panel the Next button reads "Done", and pressing it
+    // means the user is finished rather than that there is anywhere to go: the
+    // cursor is already past the last step, so engine->next() would return
+    // straight away and the callout would sit there for ever
+    if (engine->isFinished()) {
+        emit closeRequested();
+        return;
+    }
+
     // an offered but unaccepted line is withdrawn rather than left behind
     emit withdrawCommand();
 
