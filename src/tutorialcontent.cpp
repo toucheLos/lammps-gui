@@ -109,6 +109,7 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("checkpoint"), QStringLiteral("anchor"),   QStringLiteral("call_to_action"),
     QStringLiteral("open_file"),  QStringLiteral("tune"),
     QStringLiteral("wait_after_run"), QStringLiteral("before"),
+    QStringLiteral("highlight"),
 };
 const QSet<QString> TUNE_KEYS = {
     QStringLiteral("command"), QStringLiteral("arg"), QStringLiteral("from"),
@@ -364,6 +365,7 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("open_file"), path, ctx, step.openFile);
     readString(obj, QStringLiteral("section"), path, ctx, step.section);
     readString(obj, QStringLiteral("before"), path, ctx, step.before);
+    readString(obj, QStringLiteral("highlight"), path, ctx, step.highlight);
     // two answers to the same question: where do this step's commands go?
     if (!step.section.isEmpty() && !step.before.isEmpty())
         ctx.error(sub(path, QStringLiteral("before")),
@@ -480,6 +482,10 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
                 ctx.error(sub(path, QStringLiteral("anchor")),
                           QStringLiteral("an OBSERVE step needs an anchor; without one it "
                                          "points at nothing"));
+            if (!step.highlight.isEmpty() && step.anchor != StepAnchor::Editor)
+                ctx.error(sub(path, QStringLiteral("highlight")),
+                          QStringLiteral("a highlighted line is a line of the script, so the "
+                                         "step has to be anchored to the editor"));
             if (step.waitAfterRun && step.anchor != StepAnchor::Run)
                 ctx.error(sub(path, QStringLiteral("wait_after_run")),
                           QStringLiteral("only a step anchored to the Run button waits on a "
@@ -707,6 +713,16 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
     // the removal silently does nothing and the script quietly keeps both lines,
     // which is exactly the state the field exists to prevent
     {
+        // Lines a step names with "before" belong to a script that arrived
+        // complete, so they are in the file without the tour ever writing
+        // them.  A "replaces" may legitimately name one of those -- Tutorial 2
+        // replaces the `run 0 post no` its input file came with -- while a
+        // typo still matches nothing and is still caught.
+        QSet<QString> fromFile;
+        for (const auto &act : out.actlist)
+            for (const auto &step : act.steps)
+                if (!step.before.isEmpty()) fromFile.insert(step.before);
+
         QSet<QString> writtenSoFar;
         QSet<QString> wordsSoFar;
         for (const auto &act : out.actlist)
@@ -718,10 +734,12 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
                                              "puts in the script")
                                   .arg(step.id, step.tune.command));
                 for (const auto &cmd : step.commands) {
-                    if (!cmd.replaces.isEmpty() && !writtenSoFar.contains(cmd.replaces))
+                    if (!cmd.replaces.isEmpty() && !writtenSoFar.contains(cmd.replaces) &&
+                        !fromFile.contains(cmd.replaces))
                         ctx.error(QStringLiteral("acts"),
                                   QStringLiteral("step \"%1\" replaces \"%2\", which no earlier "
-                                                 "command writes")
+                                                 "command writes and no step names with "
+                                                 "\"before\"")
                                       .arg(step.id, cmd.replaces));
                     writtenSoFar.insert(cmd.text);
                     wordsSoFar.insert(cmd.text.section(QLatin1Char(' '), 0, 0));

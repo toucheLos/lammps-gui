@@ -297,6 +297,17 @@ public:
     [[nodiscard]] bool configHasPackage(const char *pkg) const;
 
     /**
+     * @brief Check if a package is included in LAMMPS build
+     * @param pkg Package name
+     * @return true if included, false otherwise
+     *
+     * The overload for a name that is not a string constant -- a package a
+     * tutorial's content file asks for, say -- so callers do not convert at
+     * the call site.
+     */
+    [[nodiscard]] bool configHasPackage(const QString &pkg) const;
+
+    /**
      * @brief Check if LAMMPS was built with CURL support
      * @return true if CURL is available, false otherwise
      */

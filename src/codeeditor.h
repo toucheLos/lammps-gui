@@ -147,6 +147,21 @@ public:
     void clearPendingLine();
 
     /**
+     * @brief Ring a line that is already in the script
+     * @param text the line to mark, matched exactly after trimming
+     * @return true when the line was found
+     *
+     * For a tutorial whose input file arrives complete: the tour explains
+     * lines it did not write, and marking is how it points at them.  Unlike a
+     * pending line this is never inserted, never accepted and never withdrawn
+     * -- it is the user's own text, and clearing the mark leaves it alone.
+     */
+    bool markLine(const QString &text);
+
+    /** @brief Take the mark off whatever line carries it */
+    void clearMarkedLine();
+
+    /**
      * @brief Take a line an interactive tutorial wrote back out again
      * @param text the line as the tutorial wrote it
      * @return true if a matching line was found and removed
@@ -548,6 +563,9 @@ private:
     int pendingLine = -1;
     /// number of blocks the pending group covers, starting at pendingLine
     int pendingCount = 0;
+    /// Block number of a line the tour is pointing at but did not write; -1
+    /// when nothing is marked.  Never inserted, accepted or withdrawn.
+    int markedLine = -1;
     bool reformatOnReturn;    ///< Enable auto-reformatting on Enter
     bool automaticCompletion; ///< Enable auto-completion popup
     QString docver;           ///< LAMMPS documentation version string

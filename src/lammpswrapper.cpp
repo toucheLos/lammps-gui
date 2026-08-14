@@ -407,6 +407,11 @@ bool LammpsWrapper::configHasPackage(const char *package) const
     return LMPFN(config_has_package)(package) != 0;
 }
 
+bool LammpsWrapper::configHasPackage(const QString &pkg) const
+{
+    return configHasPackage(pkg.toStdString().c_str());
+}
+
 bool LammpsWrapper::configAccelerator(const char *package, const char *category,
                                       const char *setting) const
 {

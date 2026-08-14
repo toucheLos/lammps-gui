@@ -117,6 +117,12 @@ signals:
     void withdrawCommand();
 
     /**
+     * @brief Ring a line already in the script, without writing anything
+     * @param text the line to mark; empty clears the mark
+     */
+    void markLine(const QString &text);
+
+    /**
      * @brief Take a line the tour wrote back out of the script
      * @param text the line as it was written
      */

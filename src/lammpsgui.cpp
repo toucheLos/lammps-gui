@@ -515,10 +515,12 @@ void LammpsGui::createTutorialMenu()
 
 QString LammpsGui::interactiveContentFor(int collection, int tutno)
 {
-    // one entry today; adding a tutorial is a content file plus a line here
+    // adding a tutorial is a content file plus a line here
     const auto &coll = tutorialCollection(collection);
-    if (coll.key == QStringLiteral("softmatter") && tutno == 1)
-        return QStringLiteral(":/tutorials/lj-fluid.json");
+    if (coll.key == QStringLiteral("softmatter")) {
+        if (tutno == 1) return QStringLiteral(":/tutorials/lj-fluid.json");
+        if (tutno == 2) return QStringLiteral(":/tutorials/cnt-unbreakable.json");
+    }
     return {};
 }
 
@@ -531,6 +533,23 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
                  "Cannot load the tutorial content:", formatContentIssues(issues, 10));
         return;
     }
+
+    // A tutorial can name the LAMMPS packages its script needs -- Tutorial 2
+    // wants MOLECULE for its bonded styles.  Warn rather than refuse: the
+    // explanations are worth reading on a build that cannot run the script,
+    // and finding out at the first run which command failed is worse than
+    // being told now.
+    QStringList missing;
+    for (const auto &pkg : content.requiredPackages())
+        if (!lammps.configHasPackage(pkg)) missing << pkg;
+    if (!missing.isEmpty())
+        warning(this, "LAMMPS-GUI Warning",
+                QString("This tutorial needs LAMMPS package%1 your version does not have:")
+                    .arg(missing.size() > 1 ? "s" : ""),
+                QString("%1\n\nYou can still follow the tutorial and read the explanations, "
+                        "but the commands that need %2 will fail when you run the script.")
+                    .arg(missing.join(QStringLiteral(", ")),
+                         missing.size() > 1 ? "them" : "it"));
 
     // the engine outlives the tour, so leaving and restarting resumes where
     // the user left off
@@ -623,6 +642,12 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     connect(tutorialview, &TutorialView::seedSkeleton, textEdit, &CodeEditor::seedSkeleton);
     connect(tutorialview, &TutorialView::offerCommand, textEdit, &CodeEditor::setPendingLine);
     connect(tutorialview, &TutorialView::offerCommands, textEdit, &CodeEditor::setPendingLines);
+    connect(tutorialview, &TutorialView::markLine, textEdit, [this](const QString &text) {
+        if (text.isEmpty())
+            textEdit->clearMarkedLine();
+        else
+            textEdit->markLine(text);
+    });
     connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
     connect(tutorialview, &TutorialView::retractCommand, textEdit, &CodeEditor::removeTutorialLine);
     connect(tutorialview, &TutorialView::insertCommand, this, &LammpsGui::appendTutorialCommand);

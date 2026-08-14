@@ -309,6 +309,9 @@ void TutorialView::showCurrentStep()
         coach->setCallToAction(step->callToAction);
     }
 
+    // a step explaining a line the tour did not write rings it instead
+    emit markLine(group.isEmpty() ? step->highlight : QString());
+
     // a step that asks the user to change a number in a line already written
     // carries the control to do it with
     coach->setTune(step->tune);

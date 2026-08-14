@@ -404,6 +404,18 @@ than only that something is; and a step may offer a control for changing
 one argument of a line already in your script, so that "raise the
 timestep and watch it go unstable" is something you do rather than read.
 
+Not every tutorial starts from a blank outline.  Tutorial 1 begins with
+five empty section headings for you to fill in; Tutorial 2 hands you a
+script that is already complete and runnable, and the guided tour reads it
+to you before growing it from the middle.  In either case the callout rings
+the line being discussed, whether or not the tour is the thing that wrote
+it.  When a tutorial needs a LAMMPS package your build does not have, you
+are told at the start rather than at the first failing command.
+
+When you reach the end, *Done* closes the tour and leaves your script open;
+if the next tutorial is available and has a guided tour of its own, the
+final panel offers to start it.
+
 Progress is remembered per tutorial, so closing LAMMPS-GUI and coming
 back offers to resume where you left off or to start over.  Nothing is
 ever locked: you can move forwards or backwards at any point, and the

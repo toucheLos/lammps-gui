@@ -258,7 +258,7 @@ decisions and caveats as binding unless we explicitly revise them here.
 | `src/setvariables.{cpp,h}` | Dialog for editing index-style LAMMPS variable name/value pairs |
 | `src/shellaliases.{cpp,h}` | `ShellAliases`: table of aliases defined in every shell the `CommandWindow` starts (works around rc sections gated on a terminal, and `ls` dropping its column format off one) |
 | `src/tutorialwizard.{cpp,h}` | Step-by-step wizard for setting up and launching LAMMPS tutorials |
-| `src/tutorialcontent.{cpp,h}` | Schema of an interactive tutorial (acts, steps, commands, concepts, `TuneControl`) plus the JSON loader and its path-addressed validation |
+| `src/tutorialcontent.{cpp,h}` | Schema of an interactive tutorial (acts, steps, commands, concepts, `TuneControl`) plus the JSON loader and its path-addressed validation. A step places its commands under a `section` heading, above a named line (`before`, for a script that arrives complete), or at the end; `highlight` rings a line the tour did not write |
 | `src/tutorialengine.{cpp,h}` | `TutorialEngine`: cursor through the acts, command-group bookkeeping, the concept reminder budget, and saved progress. Holds no widgets |
 | `src/tutorialview.{cpp,h}` | `TutorialView`: turns the engine's cursor into a coach mark -- resolves anchors to rectangles, positions the callout, offers commands to the editor, checks typed answers |
 | `src/tutorialcoach.{cpp,h}` | `TutorialCoach` (the pale-yellow callout with its tail) and `TutorialSpotlight` (transparent ring layer). Colours live here, not in `constants.h`, which is Qt Core-only |
