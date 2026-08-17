@@ -140,6 +140,16 @@ main.cpp
 
 ### Key design points
 
+**Interactive tutorials are data.** A guided tutorial is a JSON content file
+under `resources/tutorials/`, validated at load time with path-addressed
+diagnostics; adding one is a content file plus a line in
+`LammpsGui::interactiveContentFor()`. **Before authoring or changing tutorial
+content, read `doc/tutorial-authoring.md`** -- it holds the invariants, the
+placement rules (`section` / `before` / `highlight` / `replaces`), the schema
+reference, and the verification recipe, the best of which is diffing the tour's
+output against the article's own `solution/*.lmp`. `doc/tutorial-mode-design.md`
+and `doc/tutorial-mode-redesign.md` record how the model got here.
+
 **Plugin vs. linked mode.** When built with `LAMMPS_GUI_USE_PLUGIN=ON` (default), the executable has no link-time dependency on LAMMPS. `plugin/liblammpsplugin.c` provides `dlopen`-based dispatch; `LammpsWrapper` calls through function pointers loaded at startup. This lets the GUI ship as a standalone binary that can download or swap LAMMPS shared libraries.
 
 **Native chart rendering.** Charts are drawn by a single self-contained renderer, `PlotWidget` (`src/plotwidget.{cpp,h}`), a `QWidget`+`QPainter` 2D line/scatter plotter that depends only on Qt Widgets — no Qt Charts, Qt Graphs, or QML. `ChartWindow` owns one `ChartColumn` per thermo column — the neutral `PlotSeries` data objects (`src/plotseries.h`) live there — plus a *single* `ChartViewer` that is rebound (via `setColumn()`) to whichever column is selected and renders it through `PlotWidget`; axis-layout math (nice ticks, label formatting) lives in the Qt-free `plotaxismath` (`src/plotaxismath.{cpp,h}`). Both the old one-`ChartViewer`-per-column layout and the `ChartBackend`/QtCharts/QtGraphs abstraction were removed once the native single-view renderer reached parity.

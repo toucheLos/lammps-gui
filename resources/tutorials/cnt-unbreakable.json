@@ -17,7 +17,7 @@
       "explain": "A dollar sign expands the variable immediately, as the line is read, and freezes the number into the command. The v_ prefix defers it, so the value is recomputed as the run proceeds." },
     { "id": "fix-output", "term": "f_ references a fix",
       "explain": "Fixes can compute as well as act. Referencing one with f_ reads whatever it has stored -- here the force a setforce fix cancelled, which is exactly the force being applied." },
-    { "id": "immobilise", "term": "holding atoms still",
+    { "id": "immobilize", "term": "holding atoms still",
       "explain": "Zeroing the force stops atoms accelerating but leaves whatever velocity they already had. Setting the velocity as well is what makes them stay put, or move at a speed you choose." },
     { "id": "subset-thermostat", "term": "thermostatting a subset",
       "explain": "A temperature computed over frozen atoms is meaningless. Thermostat the part that is free to move, and tell the thermodynamic output to report that part's temperature rather than the whole system's." }
@@ -104,7 +104,7 @@
           "commands": [
             { "text": "group carbon_atoms type 1",
               "explain": "Every atom in this system is carbon, so this group is all of them. It exists to be measured in the next two lines.",
-              "concept": "immobilise",
+              "concept": "immobilize",
               "notes": [
                 { "arg": 2, "note": "how the group is built",
                   "alternatives": "`type` here, but `region`, `id` and set operations on other groups are all available -- and you will use `region` in a moment." } ] },
@@ -150,13 +150,13 @@
           "commands": [
             { "text": "group cnt_top region rtop",
               "explain": "The atoms that are inside each region **at this moment**. Membership is fixed here and does not change as the atoms move, which is what makes it safe to pull on `cnt_top` for the rest of the run.",
-              "concept": "immobilise" },
+              "concept": "immobilize" },
             { "text": "group cnt_bot region rbot", "together": true,
               "explain": "The other end." },
             { "text": "group cnt_mid region rmid", "together": true,
               "explain": "And the middle." },
             { "text": "set group cnt_top mol 1",
-              "explain": "Give each of the three groups its own molecule ID. Nothing in the physics depends on this -- the three parts are still one connected tube -- but the IDs make the three parts easy to tell apart when colouring a picture or post-processing a trajectory." },
+              "explain": "Give each of the three groups its own molecule ID. Nothing in the physics depends on this -- the three parts are still one connected tube -- but the IDs make the three parts easy to tell apart when coloring a picture or post-processing a trajectory." },
             { "text": "set group cnt_bot mol 2", "together": true,
               "explain": "The bottom end." },
             { "text": "set group cnt_mid mol 3", "together": true,
@@ -277,7 +277,7 @@
           "commands": [
             { "text": "fix mysf1 cnt_top setforce 0 0 0",
               "explain": "Zero the force on every atom of each end group, in all three directions, at every step.",
-              "concept": "immobilise",
+              "concept": "immobilize",
               "notes": [
                 { "arg": 4, "note": "the force to impose, per direction",
                   "alternatives": "`NULL` in a slot leaves that direction's force alone, which is how an end is held in x while staying free in y and z." } ] },
@@ -285,7 +285,7 @@
               "explain": "The other end." },
             { "text": "velocity cnt_top set 0 0 0",
               "explain": "Zero force stops the ends **accelerating**, but leaves whatever velocity they already had. Setting the velocity too is what actually holds them still.\n\nThe pair together is the idiom: `setforce` decides that nothing else may move these atoms, and `velocity set` decides how they move instead. In a moment you will keep the first and change the second, and that is the deformation.",
-              "concept": "immobilise" },
+              "concept": "immobilize" },
             { "text": "velocity cnt_bot set 0 0 0", "together": true,
               "explain": "The other end." }
           ]
@@ -307,7 +307,7 @@
           "before": "run 0 post no",
           "commands": [
             { "text": "variable Lcnt equal xcm(cnt_top,x)-xcm(cnt_bot,x)",
-              "explain": "The length: the distance along x between the centres of mass of the two end groups. `xcm()` is one of the group functions available in an equal-style variable." },
+              "explain": "The length: the distance along x between the centers of mass of the two end groups. `xcm()` is one of the group functions available in an equal-style variable." },
             { "text": "variable Fcnt equal f_mysf1[1]-f_mysf2[1]", "together": true,
               "explain": "The force -- and this is the clever part. `setforce` does not merely discard the force it cancels; it stores it. Reading it back with `f_mysf1[1]` gives the x component of the total force the rest of the tube was exerting on that end, which is exactly the force needed to hold the end where it is.\n\nSo the tube reports its own tension, and no extra machinery is needed to measure it.",
               "concept": "fix-output",
@@ -403,8 +403,8 @@
           "anchor": "editor",
           "commands": [
             { "text": "velocity cnt_top set 0.0005 0 0",
-              "explain": "Half a thousandth of an angstrom per femtosecond, each way -- 100 metres per second of separation.\n\nThat is enormously faster than any real tensile test, and it is the usual compromise: slow enough that the tube stays near equilibrium, fast enough to reach breaking strain within a simulation you can afford.",
-              "concept": "immobilise",
+              "explain": "Half a thousandth of an angstrom per femtosecond, each way -- 100 meters per second of separation.\n\nThat is enormously faster than any real tensile test, and it is the usual compromise: slow enough that the tube stays near equilibrium, fast enough to reach breaking strain within a simulation you can afford.",
+              "concept": "immobilize",
               "notes": [
                 { "arg": 4, "note": "the velocity, in angstroms per femtosecond",
                   "alternatives": "Pull harder and the tube has less time to relax between steps, so it appears stiffer and stronger than it is -- a real effect in these simulations, not a bug." } ] },

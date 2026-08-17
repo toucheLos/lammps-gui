@@ -57,7 +57,7 @@
           "id": "a1-s0",
           "kind": "OBSERVE",
           "title": "Choose the rules of the world",
-          "teach": "This is your input script, and for now it is only an outline.\n\nA LAMMPS input script is read strictly top to bottom, and the order matters: some commands only work *before* the simulation box exists, others only after, and only a few work in both places. Rather than memorise that, the script is laid out in five labelled sections and filled in turn. Everything after a `#` is a comment, so the headings you see are notes to yourself and nothing more.\n\nOver the next steps each section fills in, one command at a time, and you will end up with a script that runs.",
+          "teach": "This is your input script, and for now it is only an outline.\n\nA LAMMPS input script is read strictly top to bottom, and the order matters: some commands only work *before* the simulation box exists, others only after, and only a few work in both places. Rather than memorize that, the script is laid out in five labelled sections and filled in turn. Everything after a `#` is a comment, so the headings you see are notes to yourself and nothing more.\n\nOver the next steps each section fills in, one command at a time, and you will end up with a script that runs.",
           "anchor": "editor_all",
           "call_to_action": "Press Next to write the first line."
         },
@@ -71,7 +71,7 @@
           "section": "# 1) Initialization",
           "commands": [
             { "text": "units lj",
-              "explain": "Work in reduced units, where every quantity is dimensionless. This unit system is the usual choice for simulations exploring general statistical-mechanical behaviour, because it emphasises the relative sizes of the parameters rather than representing any one specific material.",
+              "explain": "Work in reduced units, where every quantity is dimensionless. This unit system is the usual choice for simulations exploring general statistical-mechanical behavior, because it emphasizes the relative sizes of the parameters rather than representing any one specific material.",
               "concept": "reduced-units",
               "notes": [
                 { "arg": 1, "note": "the unit system",
@@ -383,7 +383,7 @@
               "concept": "timestep-stability",
               "notes": [
                 { "arg": 1, "note": "how far time moves in one step",
-                  "alternatives": "Raise this too far and the integrator steps an atom straight through its neighbour's repulsive core. You will do exactly that on purpose shortly.",
+                  "alternatives": "Raise this too far and the integrator steps an atom straight through its neighbor's repulsive core. You will do exactly that on purpose shortly.",
                   "concept": "timestep-stability" } ] },
             { "text": "run 25000", "together": true,
               "explain": "25000 steps at 0.005 each is 125 reduced time units of dynamics." }
@@ -677,7 +677,7 @@
           "kind": "OBSERVE",
           "title": "It is yours now",
           "anchor": "editor",
-          "teach": "Three things worth trying, each one number.\n\n**Raise the timestep** to 0.05 and run again: the total energy climbs without bound, and the run may stop with **ERROR: Lost atoms**. The integrator has stepped an atom straight through its neighbour's repulsive core; it almost never means atoms were really lost, it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nAll the runs in these tutorials are deliberately kept short so they finish on a personal computer. None of them is long enough to produce statistically meaningful results.",
+          "teach": "Three things worth trying, each one number.\n\n**Raise the timestep** to 0.05 and run again: the total energy climbs without bound, and the run may stop with **ERROR: Lost atoms**. The integrator has stepped an atom straight through its neighbor's repulsive core; it almost never means atoms were really lost, it means the integration went unstable.\n\n**Deepen the heavy-atom well** with `pair_coeff 2 2 2.0 3.0` and see whether the species separate again instead of mixing.\n\n**Ramp the temperature** by giving `fix langevin` different start and end values.\n\nAll the runs in these tutorials are deliberately kept short so they finish on a personal computer. None of them is long enough to produce statistically meaningful results.",
           "call_to_action": "Change something and run it again."
         }
       ]
