@@ -144,10 +144,14 @@ main.cpp
 under `resources/tutorials/`, validated at load time with path-addressed
 diagnostics; adding one is a content file plus a line in
 `LammpsGui::interactiveContentFor()`. **Before authoring or changing tutorial
-content, read `doc/tutorial-authoring.md`** -- it holds the invariants, the
-placement rules (`section` / `before` / `highlight` / `replaces`), the schema
-reference, and the verification recipe, the best of which is diffing the tour's
-output against the article's own `solution/*.lmp`. `doc/tutorial-mode-design.md`
+content, read `doc/tutorial-authoring.md`** -- it opens with the pedagogical
+constraint the feature has to satisfy (a tour that writes the script for you
+can produce a user who learned nothing, and user enthusiasm is not evidence it
+worked), then covers the two source tutorial styles, the fading ladder of
+interaction, the invariants, the placement rules (`section` / `before` /
+`highlight` / `replaces`), the schema reference, and the verification recipe --
+the best of which is diffing the tour's output against the article's own
+`solution/*.lmp`. `doc/tutorial-mode-design.md`
 and `doc/tutorial-mode-redesign.md` record how the model got here.
 
 **Plugin vs. linked mode.** When built with `LAMMPS_GUI_USE_PLUGIN=ON` (default), the executable has no link-time dependency on LAMMPS. `plugin/liblammpsplugin.c` provides `dlopen`-based dispatch; `LammpsWrapper` calls through function pointers loaded at startup. This lets the GUI ship as a standalone binary that can download or swap LAMMPS shared libraries.
