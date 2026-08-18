@@ -197,6 +197,8 @@ public slots:
 private slots:
     void goNext(); ///< advance, withdrawing anything uncommitted
     void applyTune(double value); ///< write the tuned value into the script
+    void showHint();              ///< nudge the user on a typed drill
+    void revealAnswer();          ///< write the drill's answer in as a pending line
 
 private:
     /// render the markdown subset (bold, italic, inline code) as rich text
@@ -208,6 +210,8 @@ private:
     void rewind(const QString &stepId);
     /// remove the lines a group supersedes, recording them for the rewind
     void retractSuperseded(const QList<CommandLine> &group);
+    /// whether any command in a group is a typed drill
+    static bool anyTypedInGroup(const QList<CommandLine> &group);
 
     /**
      * @brief RAII flag marking a write the tour made itself
@@ -234,6 +238,7 @@ private:
     };
 
     QString nextLabel;                        ///< completion panel's extra button, if any
+    bool predictionShown   = false;           ///< this step's prediction has been resolved
     bool inserting         = false;           ///< true while the tour writes its own lines
     TutorialEngine *engine = nullptr;         ///< drives the tutorial (not owned)
     QWidget *host          = nullptr;         ///< main window (not owned)

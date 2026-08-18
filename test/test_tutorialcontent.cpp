@@ -668,6 +668,81 @@ TEST(TutorialContentTest, SectionAndBeforeAreMutuallyExclusive)
         << qPrintable(formatContentIssues(bothIssues));
 }
 
+// A question the user answers silently and is never marked on is worse than no
+// question, so a prediction has to come with the answer that resolves it.
+TEST(TutorialContentTest, APredictionNeedsAnAnswer)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t",
+          "commands": [ { "text": "run 100", "explain": "go" } ] },
+        { "id": "s2", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "run",
+          "call_to_action": "Press the Run button.",
+          "predict": "will the energy rise or fall?",
+          "expect": "It falls, then levels off." } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    EXPECT_TRUE(issues.isEmpty()) << qPrintable(formatContentIssues(issues));
+    ASSERT_NE(content.step(0, 1), nullptr);
+    EXPECT_FALSE(content.step(0, 1)->predict.isEmpty());
+
+    const QByteArray unresolved = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t",
+          "commands": [ { "text": "run 100", "explain": "go" } ] },
+        { "id": "s2", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "run",
+          "call_to_action": "Press the Run button.",
+          "predict": "will the energy rise or fall?" } ] } ]
+    })";
+    QList<ContentIssue> bad;
+    parseTutorialJson(unresolved, &bad);
+    EXPECT_GT(countContentErrors(bad), 0);
+    EXPECT_TRUE(formatContentIssues(bad).contains(QStringLiteral("never resolved")))
+        << qPrintable(formatContentIssues(bad));
+}
+
+// A drill with nothing to fall back on is a memory test the user did not sign
+// up for, so a typed command has to carry a hint.
+TEST(TutorialContentTest, ATypedCommandNeedsAHint)
+{
+    const QByteArray doc = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "thermo 50", "explain": "every fifty steps", "typed": true } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    parseTutorialJson(doc, &issues);
+    EXPECT_GT(countContentErrors(issues), 0);
+    EXPECT_TRUE(formatContentIssues(issues).contains(QStringLiteral("needs a hint")))
+        << qPrintable(formatContentIssues(issues));
+}
+
+// A script that arrives complete may be run before the tour has written
+// anything -- that is the whole point of the given-and-modify style.
+TEST(TutorialContentTest, ACompleteScriptMayBeRunBeforeAnyCommand)
+{
+    const QByteArray doc = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "OBSERVE", "title": "S", "teach": "t", "anchor": "run",
+          "call_to_action": "Run it." },
+        { "id": "s2", "kind": "SHOW", "title": "S", "teach": "t", "before": "run 0 post no",
+          "commands": [ { "text": "group all_atoms type 1", "explain": "everything" } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    parseTutorialJson(doc, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

@@ -31,6 +31,8 @@ TutorialView::TutorialView(TutorialEngine *engine, QWidget *host) :
     connect(coach, &TutorialCoach::backRequested, this, &TutorialView::goBack);
     connect(coach, &TutorialCoach::tuneRequested, this, &TutorialView::applyTune);
     connect(coach, &TutorialCoach::extraRequested, this, &TutorialView::nextTutorialRequested);
+    connect(coach, &TutorialCoach::hintRequested, this, &TutorialView::showHint);
+    connect(coach, &TutorialCoach::revealRequested, this, &TutorialView::revealAnswer);
     connect(engine, &TutorialEngine::stepChanged, this, &TutorialView::showCurrentStep);
 }
 
@@ -201,6 +203,7 @@ void TutorialView::showCurrentStep()
                                          "editor is yours -- keep changing it and re-running to "
                                          "see what happens.</p>"));
         coach->setCallToAction(QString());
+        coach->setPrediction(QString());
         coach->setFeedback(QString(), true);
         // the last step of Tutorial 1 carries a tune control, and without this
         // it stayed on screen offering to edit a script the tour has finished
@@ -292,6 +295,7 @@ void TutorialView::showCurrentStep()
             emit offerCommands(QStringList(), step->section, step->before);
             coach->setCallToAction(
                 QStringLiteral("Type it yourself on the highlighted line, then press Tab."));
+            coach->setDrillHelpers(true);
         } else {
             emit offerCommands(texts, step->section, step->before);
             // a step that has something particular to say about accepting these
@@ -308,6 +312,11 @@ void TutorialView::showCurrentStep()
     } else {
         coach->setCallToAction(step->callToAction);
     }
+    if (group.isEmpty() || !anyTypedInGroup(group)) coach->setDrillHelpers(false);
+
+    // the question goes up with the step; the answer waits until they act
+    coach->setPrediction(step->predict);
+    predictionShown = false;
 
     // a step explaining a line the tour did not write rings it instead
     emit markLine(group.isEmpty() ? step->highlight : QString());
@@ -392,6 +401,18 @@ void TutorialView::runFinished(bool success)
     if (!step || step->anchor != StepAnchor::Run) return;
     if (!success) return; // a failed run keeps the user where the failure is
 
+    // Resolve the prediction before going anywhere.  A question the user
+    // answered silently and was never marked on is worse than no question, so
+    // a step that asked one always pauses to say what actually happened.
+    if (!step->predict.isEmpty() && !predictionShown) {
+        predictionShown = true;
+        coach->setPrediction(QString());
+        coach->setFeedback(step->expect, true);
+        coach->setCallToAction(
+            QStringLiteral("Was that what you expected? Press Next when you have looked."));
+        return;
+    }
+
     // Following the run automatically is what makes the tour feel like it is
     // watching with you.  A step can opt out when what comes next would sweep
     // the results away -- writing a data file and opening a different script --
@@ -415,6 +436,21 @@ void TutorialView::goNext()
     if (engine->isFinished()) {
         emit closeRequested();
         return;
+    }
+
+    // An unresolved prediction is resolved by Next: the first press reveals
+    // what actually happens, the second moves on.  This covers the run steps
+    // too -- nothing is ever locked, so a user may press Next instead of
+    // running, and a question they were asked but never marked on is worse
+    // than one that was never asked.
+    if (const TutorialStep *here = engine->currentStep()) {
+        if (!here->predict.isEmpty() && !predictionShown) {
+            predictionShown = true;
+            coach->setPrediction(QString());
+            coach->setFeedback(here->expect, true);
+            coach->setCallToAction(QStringLiteral("Press Next to carry on."));
+            return;
+        }
     }
 
     // an offered but unaccepted line is withdrawn rather than left behind
@@ -464,6 +500,33 @@ void TutorialView::goBack()
     // the step we land on replays from its first command, so its lines come out
     if (const TutorialStep *landing = engine->currentStep()) rewind(landing->id);
     showCurrentStep();
+}
+
+bool TutorialView::anyTypedInGroup(const QList<CommandLine> &group)
+{
+    for (const auto &cmd : group)
+        if (cmd.typed) return true;
+    return false;
+}
+
+void TutorialView::showHint()
+{
+    const CommandLine *cmd = engine->nextCommand();
+    if (!cmd || !cmd->typed) return;
+    coach->setFeedback(cmd->hint, true);
+}
+
+void TutorialView::revealAnswer()
+{
+    const TutorialStep *step = engine->currentStep();
+    const CommandLine *cmd   = engine->nextCommand();
+    if (!step || !cmd || !cmd->typed) return;
+
+    // write the answer in as a pending line: the user still has to accept it,
+    // so giving up costs them the generation but not the step
+    const InsertGuard guard(inserting);
+    emit offerCommands(QStringList() << cmd->text, step->section, step->before);
+    coach->setFeedback(QStringLiteral("There it is. Press Tab to accept it."), true);
 }
 
 void TutorialView::applyTune(double value)

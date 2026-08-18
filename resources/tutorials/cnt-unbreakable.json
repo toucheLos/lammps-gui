@@ -4,97 +4,145 @@
   "title": "Tutorial 2 -- Pulling on a carbon nanotube",
   "collection": "softmatter",
   "tutorial": 2,
-  "requires_packages": ["MOLECULE"],
+  "requires_packages": [
+    "MOLECULE"
+  ],
   "skeleton": [],
   "attribution": {
     "source": "A Set of Tutorials for the LAMMPS Simulation Package (Article v1.0), Simon Gravelle, Cecilia M. S. Alvares, Jacob R. Gissinger, Axel Kohlmeyer; Living J. Comp. Mol. Sci. 2025, 6(1), 3037; https://doi.org/10.33011/livecoms.6.1.3037",
     "license": "CC BY 4.0",
     "credit": "Adapted from Tutorial 2 of the LAMMPS Tutorials by Gravelle, Alvares, Gissinger and Kohlmeyer."
   },
-
   "concepts": [
-    { "id": "immediate-expansion", "term": "${...} versus v_",
-      "explain": "A dollar sign expands the variable immediately, as the line is read, and freezes the number into the command. The v_ prefix defers it, so the value is recomputed as the run proceeds." },
-    { "id": "fix-output", "term": "f_ references a fix",
-      "explain": "Fixes can compute as well as act. Referencing one with f_ reads whatever it has stored -- here the force a setforce fix cancelled, which is exactly the force being applied." },
-    { "id": "immobilize", "term": "holding atoms still",
-      "explain": "Zeroing the force stops atoms accelerating but leaves whatever velocity they already had. Setting the velocity as well is what makes them stay put, or move at a speed you choose." },
-    { "id": "subset-thermostat", "term": "thermostatting a subset",
-      "explain": "A temperature computed over frozen atoms is meaningless. Thermostat the part that is free to move, and tell the thermodynamic output to report that part's temperature rather than the whole system's." }
+    {
+      "id": "immediate-expansion",
+      "term": "${...} versus v_",
+      "explain": "A dollar sign expands the variable immediately, as the line is read, and freezes the number into the command. The v_ prefix defers it, so the value is recomputed as the run proceeds."
+    },
+    {
+      "id": "fix-output",
+      "term": "f_ references a fix",
+      "explain": "Fixes can compute as well as act. Referencing one with f_ reads whatever it has stored -- here the force a setforce fix cancelled, which is exactly the force being applied."
+    },
+    {
+      "id": "immobilize",
+      "term": "holding atoms still",
+      "explain": "Zeroing the force stops atoms accelerating but leaves whatever velocity they already had. Setting the velocity as well is what makes them stay put, or move at a speed you choose."
+    },
+    {
+      "id": "subset-thermostat",
+      "term": "thermostatting a subset",
+      "explain": "A temperature computed over frozen atoms is meaningless. Thermostat the part that is free to move, and tell the thermodynamic output to report that part's temperature rather than the whole system's."
+    }
   ],
-
   "acts": [
     {
       "id": "act1",
-      "title": "The script you were given",
+      "title": "Open it and run it",
       "steps": [
         {
           "id": "a1-s0",
           "kind": "OBSERVE",
           "title": "This one starts finished",
-          "teach": "Tutorial 1 began with five empty headings and you filled them in. This one is different: `unbreakable.lmp` is already a complete, runnable script.\n\nThat is because the system is no longer a box of loose particles. It is a **carbon nanotube** -- 700 atoms held together by chemical bonds -- and describing which atoms are bonded to which is not something you type. It comes from a data file.\n\nThe first few steps read what you have been given. After that you will grow the script from the middle, adding lines above the `run 0 post no` at the bottom.",
+          "teach": "Tutorial 1 began with five empty headings and you filled them in. This one is different: `unbreakable.lmp` is already a complete, runnable script.\n\nThat is because the system is no longer a box of loose particles. It is a **carbon nanotube** -- atoms held together by chemical bonds -- and describing which atoms are bonded to which is not something you type. It comes from a data file.\n\nSo run it first, and read it afterwards.",
           "anchor": "editor_all",
-          "call_to_action": "Read the script, then press Next."
+          "call_to_action": "Press Next."
         },
         {
           "id": "a1-s1",
           "kind": "OBSERVE",
-          "title": "Real units this time",
-          "teach": "`units real` puts distances in angstroms, times in femtoseconds and energies in kcal/mol.\n\nTutorial 1 used `lj`, where everything was dimensionless and no number meant anything in particular. Here the numbers are physical: the bond length below really is 1.4 angstroms, which is the carbon-carbon distance in graphite.\n\nThis is the line that decides what every other number in the file means, which is why it comes first.",
-          "anchor": "editor",
-          "highlight": "units real",
-          "doc_link": "units",
-          "call_to_action": "Look at line 1 of the script."
+          "title": "Run it as it stands",
+          "teach": "The last line is `run 0 post no`: set everything up, compute the forces once, and stop. It is the cheapest possible check that a script is complete and self-consistent.",
+          "anchor": "run",
+          "call_to_action": "Press the Run button.",
+          "predict": "the data file supplies every atom and every bond. For 700 carbon atoms in a tube wall, do you expect fewer bonds than atoms, about the same, or more?",
+          "expect": "More -- about 1050. Each carbon in the wall has three neighbors and each bond is shared between two atoms, so the count is close to 3/2 times the number of atoms. A chain molecule would have given you slightly fewer bonds than atoms.",
+          "checkpoint": true
         },
         {
           "id": "a1-s2",
           "kind": "OBSERVE",
-          "title": "Atoms that can be bonded",
-          "teach": "`atom_style molecular` gives each atom a molecule ID and the ability to take part in bonds, angles, dihedrals and impropers. `atom_style atomic` from Tutorial 1 could not: a point with a mass has nothing to bond with.\n\n`boundary f f f` makes all three directions **fixed** rather than periodic. The nanotube sits in an empty box with room around it, so nothing should wrap from one face to the other -- and the tube is about to be stretched, which a periodic boundary would fight.",
-          "anchor": "editor",
-          "highlight": "atom_style molecular",
-          "doc_link": "atom_style",
-          "call_to_action": "Look at lines 2 and 3."
-        },
-        {
-          "id": "a1-s3",
-          "kind": "OBSERVE",
-          "title": "Four kinds of internal coordinate",
-          "teach": "A molecular force field describes a molecule through the coordinates inside it, and needs a style for each kind:\n\n**`bond_style harmonic`** -- a spring between two bonded atoms:\n\n**U_{b} = k_{b} (r − r_{0})^{2}**\n\n**`angle_style harmonic`** -- the same shape applied to the angle formed by three:\n\n**U_{θ} = k_{θ} (θ − θ_{0})^{2}**\n\n**`dihedral_style opls`** and **`improper_style harmonic`** constrain groups of four atoms, keeping the ring structure flat rather than letting it fold.\n\nLook at the bond energy again. It grows without limit as r increases, so the harder you pull the harder it pulls back, and it can **never break**. That is the whole point of this half of the tutorial -- and what the second half changes.",
-          "anchor": "editor",
-          "highlight": "bond_style harmonic",
-          "doc_link": "bond_style harmonic",
-          "call_to_action": "Look at the four style commands."
-        },
-        {
-          "id": "a1-s4",
-          "kind": "OBSERVE",
-          "title": "Neighbours that already know each other",
-          "teach": "`pair_style lj/cut 14.0` is the same Lennard-Jones potential as Tutorial 1, with a 14 angstrom cutoff -- but it now has company, and the two would double-count.\n\nTwo atoms joined by a bond are already held at the right distance by that bond. Letting them also feel the full Lennard-Jones interaction would be describing the same thing twice, with two sets of parameters that were never fitted together.\n\n`special_bonds lj 0.0 0.0 0.5` is the answer: atoms one bond apart feel none of it, two bonds apart none, three bonds apart half. Those weights are part of the OPLS-AA force field, not a free choice.",
-          "anchor": "editor",
-          "highlight": "special_bonds lj 0.0 0.0 0.5",
-          "doc_link": "special_bonds",
-          "call_to_action": "Look at the pair_style and special_bonds lines."
-        },
-        {
-          "id": "a1-s5",
-          "kind": "OBSERVE",
-          "title": "Where the nanotube comes from",
-          "teach": "`read_data unbreakable.data` builds the box and the atoms, and this time it also brings the **topology**: which pairs are bonded, which triples form an angle, which quadruples form a dihedral or an improper, each tagged with a type.\n\nThat file was generated with VMD and TopoTools. Writing 700 atoms and their bonds by hand is not something anyone does.\n\n`include unbreakable.inc` then reads the numeric parameters -- `pair_coeff`, `bond_coeff`, `angle_coeff`, `dihedral_coeff`, `improper_coeff` -- as though they had been typed at that point. Keeping them in their own file means the same parameters can be reused, or swapped for a different force field, without touching the script.",
-          "anchor": "editor",
-          "highlight": "read_data unbreakable.data",
-          "doc_link": "read_data",
-          "call_to_action": "Right-click unbreakable.inc in the editor to read the parameters."
+          "title": "What read_data brought in",
+          "teach": "The Output window lists what was read: atoms, bonds, angles, dihedrals and impropers, each with a count and a number of types.\n\nThat is the difference between this tutorial and the last one. In Tutorial 1 the system came from three commands you typed. Here almost all of it arrived in a file, because a nanotube's connectivity is not something anyone writes out by hand -- this one was generated with VMD and TopoTools.",
+          "anchor": "log",
+          "call_to_action": "Read the counts near the top of the Output window."
         }
       ]
     },
-
     {
       "id": "act2",
-      "title": "Find the ends of the tube",
+      "title": "What the script says",
       "steps": [
         {
           "id": "a2-s1",
+          "kind": "OBSERVE",
+          "title": "Real units this time",
+          "teach": "`units real` puts distances in angstroms, times in femtoseconds and energies in kcal/mol.\n\nTutorial 1 used `lj`, where everything was dimensionless and no number meant anything in particular. Here the numbers are physical: the bond length below really is 1.4 angstroms, which is the carbon-carbon distance in graphite.\n\nThis is the line that decides what every other number in the file means, which is why it comes first.",
+          "doc_link": "units",
+          "anchor": "editor",
+          "highlight": "units real",
+          "call_to_action": "Look at line 1 of the script."
+        },
+        {
+          "id": "a2-s2",
+          "kind": "OBSERVE",
+          "title": "Atoms that can be bonded",
+          "teach": "`atom_style molecular` gives each atom a molecule ID and the ability to take part in bonds, angles, dihedrals and impropers. `atom_style atomic` from Tutorial 1 could not: a point with a mass has nothing to bond with.\n\n`boundary f f f` makes all three directions **fixed** rather than periodic. The nanotube sits in an empty box with room around it, so nothing should wrap from one face to the other -- and the tube is about to be stretched, which a periodic boundary would fight.",
+          "doc_link": "atom_style",
+          "anchor": "editor",
+          "highlight": "atom_style molecular",
+          "call_to_action": "Look at lines 2 and 3."
+        },
+        {
+          "id": "a2-s3",
+          "kind": "OBSERVE",
+          "title": "Four kinds of internal coordinate",
+          "teach": "A molecular force field describes a molecule through the coordinates inside it, and needs a style for each kind:\n\n**`bond_style harmonic`** -- a spring between two bonded atoms:\n\n**U_{b} = k_{b} (r − r_{0})^{2}**\n\n**`angle_style harmonic`** -- the same shape applied to the angle formed by three:\n\n**U_{θ} = k_{θ} (θ − θ_{0})^{2}**\n\n**`dihedral_style opls`** and **`improper_style harmonic`** constrain groups of four atoms, keeping the ring structure flat rather than letting it fold.\n\nLook at the bond energy again. It grows without limit as r increases, so the harder you pull the harder it pulls back, and it can **never break**. That is the whole point of this half of the tutorial -- and what the second half changes.",
+          "doc_link": "bond_style harmonic",
+          "anchor": "editor",
+          "highlight": "bond_style harmonic",
+          "call_to_action": "Look at the four style commands.",
+          "predict": "the bond energy is k(r - r_{0})^{2}. If you keep pulling two bonded atoms apart, does the force between them level off, or keep growing?",
+          "expect": "It keeps growing, without limit. The energy is a parabola, so the force is a straight line in the extension -- the harder you pull, the harder it pulls back. That is why a harmonic bond can never break, and it is the whole point of this half of the tutorial."
+        },
+        {
+          "id": "a2-s4",
+          "kind": "OBSERVE",
+          "title": "Neighbors that already know each other",
+          "teach": "`pair_style lj/cut 14.0` is the same Lennard-Jones potential as Tutorial 1, with a 14 angstrom cutoff -- but it now has company, and the two would double-count.\n\nTwo atoms joined by a bond are already held at the right distance by that bond. Letting them also feel the full Lennard-Jones interaction would be describing the same thing twice, with two sets of parameters that were never fitted together.\n\n`special_bonds lj 0.0 0.0 0.5` is the answer: atoms one bond apart feel none of it, two bonds apart none, three bonds apart half. Those weights are part of the OPLS-AA force field, not a free choice.",
+          "doc_link": "special_bonds",
+          "anchor": "editor",
+          "highlight": "special_bonds lj 0.0 0.0 0.5",
+          "call_to_action": "Look at the pair_style and special_bonds lines.",
+          "predict": "`special_bonds lj 0.0 0.0 0.5` carries three numbers. Do you think they scale the interaction for atoms one, two and three bonds apart -- or for the first, second and third atom types?",
+          "expect": "One, two and three bonds apart. Bonded neighbors are already held at the right distance by the bond itself, so letting them feel the full Lennard-Jones interaction as well would describe the same thing twice."
+        }
+      ]
+    },
+    {
+      "id": "act3",
+      "title": "Where the parameters live",
+      "steps": [
+        {
+          "id": "a3-s1",
+          "kind": "OBSERVE",
+          "title": "A file of numbers, kept apart",
+          "teach": "`read_data unbreakable.data` builds the box and the atoms, and this time it also brings the **topology**: which pairs are bonded, which triples form an angle, which quadruples form a dihedral or an improper, each tagged with a type.\n\nThat file was generated with VMD and TopoTools. Writing 700 atoms and their bonds by hand is not something anyone does.\n\n`include unbreakable.inc` then reads the numeric parameters -- `pair_coeff`, `bond_coeff`, `angle_coeff`, `dihedral_coeff`, `improper_coeff` -- as though they had been typed at that point. Keeping them in their own file means the same parameters can be reused, or swapped for a different force field, without touching the script.",
+          "doc_link": "include",
+          "anchor": "editor",
+          "highlight": "include unbreakable.inc",
+          "call_to_action": "Right-click unbreakable.inc in the editor and view it. Find the bond_coeff line.",
+          "predict": "the .inc file holds five coefficient lines. Which one do you think fixes the 1.4 angstrom carbon-carbon distance?",
+          "expect": "`bond_coeff 1 469 1.4` -- the second number is the spring constant in kcal/mol per square angstrom, and the third is the equilibrium length. The 469 is what makes a C-C bond stiff."
+        }
+      ]
+    },
+    {
+      "id": "act4",
+      "title": "Find the ends of the tube",
+      "steps": [
+        {
+          "id": "a4-s1",
           "kind": "SHOW",
           "title": "Where the tube begins and ends",
           "teach": "The plan is to grip the nanotube at both ends and pull. So the script has to find those ends -- and it should find them by measuring, not by you reading coordinates off a picture.\n\nEverything from here goes **above** the `run 0 post no` line, which stays at the bottom of the file.",
@@ -102,23 +150,38 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "group carbon_atoms type 1",
+            {
+              "text": "group carbon_atoms type 1",
               "explain": "Every atom in this system is carbon, so this group is all of them. It exists to be measured in the next two lines.",
               "concept": "immobilize",
               "notes": [
-                { "arg": 2, "note": "how the group is built",
-                  "alternatives": "`type` here, but `region`, `id` and set operations on other groups are all available -- and you will use `region` in a moment." } ] },
-            { "text": "variable xmax equal bound(carbon_atoms,xmax)-0.5",
+                {
+                  "arg": 2,
+                  "note": "how the group is built",
+                  "alternatives": "`type` here, but `region`, `id` and set operations on other groups are all available -- and you will use `region` in a moment."
+                }
+              ]
+            },
+            {
+              "text": "variable xmax equal bound(carbon_atoms,xmax)-0.5",
               "explain": "`bound()` returns the extreme coordinate of a group, so these two find the far ends of the tube along x and step half an angstrom inside them.",
               "notes": [
-                { "arg": 3, "note": "the expression",
-                  "alternatives": "Widening the 0.5 grips more atoms at each end; too wide and you are pulling on the middle of the tube rather than its edge." } ] },
-            { "text": "variable xmin equal bound(carbon_atoms,xmin)+0.5", "together": true,
-              "explain": "And the other end." }
+                {
+                  "arg": 3,
+                  "note": "the expression",
+                  "alternatives": "Widening the 0.5 grips more atoms at each end; too wide and you are pulling on the middle of the tube rather than its edge."
+                }
+              ]
+            },
+            {
+              "text": "variable xmin equal bound(carbon_atoms,xmin)+0.5",
+              "explain": "And the other end.",
+              "together": true
+            }
           ]
         },
         {
-          "id": "a2-s2",
+          "id": "a4-s2",
           "kind": "SHOW",
           "title": "Three slices",
           "teach": "Now cut the tube into three along its length: a slice at each end to grip, and everything between them.",
@@ -126,21 +189,33 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "region rtop block ${xmax} INF INF INF INF INF",
+            {
+              "text": "region rtop block ${xmax} INF INF INF INF INF",
               "explain": "Three regions: beyond `xmax`, before `xmin`, and the middle between them. `INF` means \"as far as the box goes\" in that direction.",
               "concept": "immediate-expansion",
               "notes": [
-                { "arg": 3, "note": "the variable, expanded with a dollar sign",
+                {
+                  "arg": 3,
+                  "note": "the variable, expanded with a dollar sign",
                   "alternatives": "`${xmax}` is replaced by its value the moment LAMMPS reads the line, and the number is frozen into the region. `v_xmax` would be re-evaluated during the run, and a region that moved as the tube stretched is not what is wanted here.",
-                  "concept": "immediate-expansion" } ] },
-            { "text": "region rbot block INF ${xmin} INF INF INF INF", "together": true,
-              "explain": "The other end." },
-            { "text": "region rmid block ${xmin} ${xmax} INF INF INF INF", "together": true,
-              "explain": "And everything in between." }
+                  "concept": "immediate-expansion"
+                }
+              ]
+            },
+            {
+              "text": "region rbot block INF ${xmin} INF INF INF INF",
+              "explain": "The other end.",
+              "together": true
+            },
+            {
+              "text": "region rmid block ${xmin} ${xmax} INF INF INF INF",
+              "explain": "And everything in between.",
+              "together": true
+            }
           ]
         },
         {
-          "id": "a2-s3",
+          "id": "a4-s3",
           "kind": "SHOW",
           "title": "The atoms in each slice",
           "teach": "A region is a shape; a group is a set of atoms. Turning one into the other is what lets the rest of the script treat the ends differently from the middle.",
@@ -148,49 +223,65 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "group cnt_top region rtop",
+            {
+              "text": "group cnt_top region rtop",
               "explain": "The atoms that are inside each region **at this moment**. Membership is fixed here and does not change as the atoms move, which is what makes it safe to pull on `cnt_top` for the rest of the run.",
-              "concept": "immobilize" },
-            { "text": "group cnt_bot region rbot", "together": true,
-              "explain": "The other end." },
-            { "text": "group cnt_mid region rmid", "together": true,
-              "explain": "And the middle." },
-            { "text": "set group cnt_top mol 1",
-              "explain": "Give each of the three groups its own molecule ID. Nothing in the physics depends on this -- the three parts are still one connected tube -- but the IDs make the three parts easy to tell apart when coloring a picture or post-processing a trajectory." },
-            { "text": "set group cnt_bot mol 2", "together": true,
-              "explain": "The bottom end." },
-            { "text": "set group cnt_mid mol 3", "together": true,
-              "explain": "And the middle." }
+              "concept": "immobilize"
+            },
+            {
+              "text": "group cnt_bot region rbot",
+              "explain": "The other end. You have seen `group ... type ...` already; this is the same command selecting by position instead.",
+              "hint": "Same shape as the line above it: group, then your name for it, then `region`, then which region.",
+              "typed": true,
+              "together": false
+            },
+            {
+              "text": "group cnt_mid region rmid",
+              "explain": "And the middle."
+            },
+            {
+              "text": "set group cnt_top mol 1",
+              "explain": "Give each of the three groups its own molecule ID. Nothing in the physics depends on this -- the three parts are still one connected tube -- but the IDs make the three parts easy to tell apart when coloring a picture or post-processing a trajectory."
+            },
+            {
+              "text": "set group cnt_bot mol 2",
+              "explain": "The bottom end.",
+              "together": true
+            },
+            {
+              "text": "set group cnt_mid mol 3",
+              "explain": "And the middle.",
+              "together": true
+            }
           ]
         },
         {
-          "id": "a2-s4",
+          "id": "a4-s4",
           "kind": "OBSERVE",
           "title": "Count them",
+          "teach": "`run 0 post no` is still the last line, so running now costs nothing and checks everything: the regions, the groups, and whether your two `bound()` variables found the ends.",
           "anchor": "run",
-          "teach": "`run 0 post no` is still the last line, so running now costs nothing and checks everything: the data file read, the parameters applied, and the groups built.",
           "call_to_action": "Press the Run button.",
-          "expect": "700 atoms in carbon_atoms, 10 in each end group, 680 in the middle",
+          "predict": "the tube is 700 atoms long and you took half an angstrom off each end. Do you expect the end groups to hold single figures, tens, or hundreds of atoms?",
+          "expect": "Tens -- 10 at each end, and 680 in the middle. A ring of the tube wall is a small number of atoms, and half an angstrom catches about one ring.",
           "checkpoint": true
         },
         {
-          "id": "a2-s5",
+          "id": "a4-s5",
           "kind": "OBSERVE",
           "title": "Do the numbers add up?",
-          "anchor": "log",
           "teach": "The Output window reports the size of every group as it is created:\n\n```\n700 atoms in group carbon_atoms\n10 atoms in group cnt_top\n10 atoms in group cnt_bot\n680 atoms in group cnt_mid\n```\n\nTen atoms at each end and 680 in between, adding to 700. This is worth checking rather than assuming: if `xmax` had been computed wrongly, or the 0.5 offset had been too large, an end group would be empty or would swallow half the tube, and nothing later would complain -- the simulation would simply pull on the wrong atoms.",
-          "call_to_action": "Find the four group lines in the Output window.",
-          "expect": "10 + 10 + 680 = 700"
+          "anchor": "log",
+          "call_to_action": "Find the four group lines in the Output window."
         }
       ]
     },
-
     {
-      "id": "act3",
+      "id": "act5",
       "title": "Make it imperfect",
       "steps": [
         {
-          "id": "a3-s1",
+          "id": "a5-s1",
           "kind": "SHOW",
           "title": "Knock some atoms out",
           "teach": "A perfect nanotube is a poor test. Real ones have defects, and a flawless tube would break in an unrealistically clean way.\n\nSo remove 2% of the carbon atoms at random -- but only from the middle, keeping away from the ends that are about to be gripped.",
@@ -198,37 +289,72 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "variable xmax_del equal ${xmax}-2",
+            {
+              "text": "variable xmax_del equal ${xmax}-2",
               "explain": "A deletion region inset two angstroms from each end, so no atom next to a gripped end can vanish.",
-              "concept": "immediate-expansion" },
-            { "text": "variable xmin_del equal ${xmin}+2", "together": true,
-              "explain": "The other side." },
-            { "text": "region rdel block ${xmin_del} ${xmax_del} INF INF INF INF", "together": true,
-              "explain": "And the region itself." },
-            { "text": "group rdel region rdel", "together": true,
-              "explain": "The atoms in it. A group and a region may share a name without confusion: LAMMPS keeps the two kinds of name apart." },
-            { "text": "delete_atoms random fraction 0.02 no rdel NULL 2793 bond yes",
+              "concept": "immediate-expansion"
+            },
+            {
+              "text": "variable xmin_del equal ${xmin}+2",
+              "explain": "The other side.",
+              "together": true
+            },
+            {
+              "text": "region rdel block ${xmin_del} ${xmax_del} INF INF INF INF",
+              "explain": "And the region itself.",
+              "together": true
+            },
+            {
+              "text": "group rdel region rdel",
+              "explain": "The atoms in it. A group and a region may share a name without confusion: LAMMPS keeps the two kinds of name apart.",
+              "together": true
+            },
+            {
+              "text": "delete_atoms random fraction 0.02 no rdel NULL 2793 bond yes",
               "explain": "Delete a random 2% of that group -- about 10 atoms out of 700.",
               "notes": [
-                { "arg": 3, "note": "the fraction to remove",
-                  "alternatives": "Raise it and the tube fails sooner and at a lower stress; a heavily damaged tube tears almost immediately." },
-                { "arg": 4, "note": "whether to delete exactly that fraction",
-                  "alternatives": "`no` treats it as a probability per atom, so the count varies slightly with the seed; `yes` deletes an exact count." },
-                { "arg": 7, "note": "the random seed",
-                  "alternatives": "Change it for a different set of defects, which is a different tube and will fail differently." },
-                { "arg": 8, "note": "what to do about the bonds of a deleted atom",
-                  "alternatives": "`bond yes` removes the bonds, angles and dihedrals that referenced it. Without it they would refer to an atom that no longer exists and LAMMPS would stop." } ] }
+                {
+                  "arg": 3,
+                  "note": "the fraction to remove",
+                  "alternatives": "Raise it and the tube fails sooner and at a lower stress; a heavily damaged tube tears almost immediately."
+                },
+                {
+                  "arg": 4,
+                  "note": "whether to delete exactly that fraction",
+                  "alternatives": "`no` treats it as a probability per atom, so the count varies slightly with the seed; `yes` deletes an exact count."
+                },
+                {
+                  "arg": 7,
+                  "note": "the random seed",
+                  "alternatives": "Change it for a different set of defects, which is a different tube and will fail differently."
+                },
+                {
+                  "arg": 8,
+                  "note": "what to do about the bonds of a deleted atom",
+                  "alternatives": "`bond yes` removes the bonds, angles and dihedrals that referenced it. Without it they would refer to an atom that no longer exists and LAMMPS would stop."
+                }
+              ]
+            }
           ]
+        },
+        {
+          "id": "a5-s2",
+          "kind": "OBSERVE",
+          "title": "See the damage",
+          "teach": "Run again. `delete_atoms` reports what it removed, and `bond yes` means it also had to tidy up every bond, angle and dihedral that referred to a deleted atom.",
+          "anchor": "run",
+          "call_to_action": "Press the Run button.",
+          "predict": "2% of about 680 middle atoms is roughly 14. Do you expect the number of *dihedrals* removed to be smaller than that, similar, or several times larger?",
+          "expect": "Several times larger. Each atom takes part in many dihedrals, so removing a handful of atoms destroys dozens of them. That is why `bond yes` matters: without it the script would stop on a dihedral referring to an atom that no longer exists."
         }
       ]
     },
-
     {
-      "id": "act4",
+      "id": "act6",
       "title": "Set it moving",
       "steps": [
         {
-          "id": "a4-s1",
+          "id": "a6-s1",
           "kind": "SHOW",
           "title": "Give the middle some heat",
           "teach": "Deleting atoms leaves gaps in the numbering, and the `velocity` command that follows needs them tidy.",
@@ -236,14 +362,19 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "reset_atoms id sort yes",
-              "explain": "Renumber the atoms so the IDs run consecutively again after the deletions." },
-            { "text": "velocity cnt_mid create 300 48455 mom yes rot yes", "together": true,
-              "explain": "Give the middle of the tube velocities drawn for a temperature of 300 K, with no net translation (`mom yes`) or rotation (`rot yes`) -- a tube that drifted or spun would confuse every measurement that follows.\n\nOnly the middle: the ends are about to be frozen and then moved by hand." }
+            {
+              "text": "reset_atoms id sort yes",
+              "explain": "Renumber the atoms so the IDs run consecutively again after the deletions."
+            },
+            {
+              "text": "velocity cnt_mid create 300 48455 mom yes rot yes",
+              "explain": "Give the middle of the tube velocities drawn for a temperature of 300 K, with no net translation (`mom yes`) or rotation (`rot yes`) -- a tube that drifted or spun would confuse every measurement that follows.\n\nOnly the middle: the ends are about to be frozen and then moved by hand.",
+              "together": true
+            }
           ]
         },
         {
-          "id": "a4-s2",
+          "id": "a6-s2",
           "kind": "SHOW",
           "title": "Two integrators and a thermostat",
           "teach": "The three parts of the tube are treated differently, and that is the heart of this simulation.",
@@ -251,23 +382,37 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "fix mynve1 cnt_top nve",
-              "explain": "The two ends are integrated plainly, with no thermostat: whatever happens to them will be imposed rather than sampled." },
-            { "text": "fix mynve2 cnt_bot nve", "together": true,
-              "explain": "The other end." },
-            { "text": "fix mynvt cnt_mid nvt temp 300 300 100",
+            {
+              "text": "fix mynve1 cnt_top nve",
+              "explain": "The two ends are integrated plainly, with no thermostat: whatever happens to them will be imposed rather than sampled."
+            },
+            {
+              "text": "fix mynve2 cnt_bot nve",
+              "explain": "The other end.",
+              "together": true
+            },
+            {
+              "text": "fix mynvt cnt_mid nvt temp 300 300 100",
               "explain": "The middle gets a Nose-Hoover thermostat holding it at 300 K. Unlike the Langevin thermostat of Tutorial 1, this one has no random forces: it rescales through an extra degree of freedom, which keeps the dynamics smooth enough to measure a force through.",
               "concept": "subset-thermostat",
               "notes": [
-                { "arg": 5, "note": "target temperature at the start of the run, then at the end",
-                  "alternatives": "Making them differ ramps the temperature, which is how a system is heated or quenched." },
-                { "arg": 7, "note": "the damping time, in time units",
+                {
+                  "arg": 5,
+                  "note": "target temperature at the start of the run, then at the end",
+                  "alternatives": "Making them differ ramps the temperature, which is how a system is heated or quenched."
+                },
+                {
+                  "arg": 7,
+                  "note": "the damping time, in time units",
                   "alternatives": "100 fs here. Too short and the thermostat fights the dynamics; too long and the temperature wanders before it is corrected.",
-                  "concept": "subset-thermostat" } ] }
+                  "concept": "subset-thermostat"
+                }
+              ]
+            }
           ]
         },
         {
-          "id": "a4-s3",
+          "id": "a6-s3",
           "kind": "SHOW",
           "title": "Hold the ends still",
           "teach": "The ends must not respond to the forces from the rest of the tube. They are handles, and their motion is going to be dictated.",
@@ -275,30 +420,45 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "fix mysf1 cnt_top setforce 0 0 0",
+            {
+              "text": "fix mysf1 cnt_top setforce 0 0 0",
               "explain": "Zero the force on every atom of each end group, in all three directions, at every step.",
               "concept": "immobilize",
               "notes": [
-                { "arg": 4, "note": "the force to impose, per direction",
-                  "alternatives": "`NULL` in a slot leaves that direction's force alone, which is how an end is held in x while staying free in y and z." } ] },
-            { "text": "fix mysf2 cnt_bot setforce 0 0 0", "together": true,
-              "explain": "The other end." },
-            { "text": "velocity cnt_top set 0 0 0",
+                {
+                  "arg": 4,
+                  "note": "the force to impose, per direction",
+                  "alternatives": "`NULL` in a slot leaves that direction's force alone, which is how an end is held in x while staying free in y and z."
+                }
+              ]
+            },
+            {
+              "text": "fix mysf2 cnt_bot setforce 0 0 0",
+              "explain": "The other end.",
+              "together": true
+            },
+            {
+              "text": "velocity cnt_top set 0 0 0",
               "explain": "Zero force stops the ends **accelerating**, but leaves whatever velocity they already had. Setting the velocity too is what actually holds them still.\n\nThe pair together is the idiom: `setforce` decides that nothing else may move these atoms, and `velocity set` decides how they move instead. In a moment you will keep the first and change the second, and that is the deformation.",
-              "concept": "immobilize" },
-            { "text": "velocity cnt_bot set 0 0 0", "together": true,
-              "explain": "The other end." }
+              "concept": "immobilize"
+            },
+            {
+              "text": "velocity cnt_bot set 0 0 0",
+              "explain": "And the same for the other end. Zero force stops the ends accelerating; setting the velocity is what actually holds them still.",
+              "hint": "The mirror of the line above: same command, same three zeros, the other group.",
+              "typed": true,
+              "together": false
+            }
           ]
         }
       ]
     },
-
     {
-      "id": "act5",
+      "id": "act7",
       "title": "Measure it",
       "steps": [
         {
-          "id": "a5-s1",
+          "id": "a7-s1",
           "kind": "SHOW",
           "title": "Length and force",
           "teach": "Two numbers make this experiment worth running: how long the tube is, and how hard it is being pulled.",
@@ -306,19 +466,28 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "variable Lcnt equal xcm(cnt_top,x)-xcm(cnt_bot,x)",
-              "explain": "The length: the distance along x between the centers of mass of the two end groups. `xcm()` is one of the group functions available in an equal-style variable." },
-            { "text": "variable Fcnt equal f_mysf1[1]-f_mysf2[1]", "together": true,
+            {
+              "text": "variable Lcnt equal xcm(cnt_top,x)-xcm(cnt_bot,x)",
+              "explain": "The length: the distance along x between the centers of mass of the two end groups. `xcm()` is one of the group functions available in an equal-style variable."
+            },
+            {
+              "text": "variable Fcnt equal f_mysf1[1]-f_mysf2[1]",
               "explain": "The force -- and this is the clever part. `setforce` does not merely discard the force it cancels; it stores it. Reading it back with `f_mysf1[1]` gives the x component of the total force the rest of the tube was exerting on that end, which is exactly the force needed to hold the end where it is.\n\nSo the tube reports its own tension, and no extra machinery is needed to measure it.",
+              "together": true,
               "concept": "fix-output",
               "notes": [
-                { "arg": 3, "note": "referencing a fix's stored output",
+                {
+                  "arg": 3,
+                  "note": "referencing a fix's stored output",
                   "alternatives": "`v_` reads a variable and `c_` a compute, as in Tutorial 1; `f_` reads a fix. The `[1]` picks the first component of the vector it stores, here the x direction.",
-                  "concept": "fix-output" } ] }
+                  "concept": "fix-output"
+                }
+              ]
+            }
           ]
         },
         {
-          "id": "a5-s2",
+          "id": "a7-s2",
           "kind": "SHOW",
           "title": "Watch it happen",
           "teach": "One image every 500 steps, viewed from the side, with the bonds drawn.",
@@ -326,19 +495,31 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "dump viz all image 500 myimage-*.ppm element type size 1000 400 zoom 6 shiny 0.3 fsaa yes bond atom 0.8 view 0 90 box no 0.0 axes no 0.0 0.0",
+            {
+              "text": "dump viz all image 500 myimage-*.ppm element type size 1000 400 zoom 6 shiny 0.3 fsaa yes bond atom 0.8 view 0 90 box no 0.0 axes no 0.0 0.0",
               "explain": "The GUI collects these into the Slide Show window as they are written, so the deformation can be played back afterwards.\n\n`bond atom 0.8` is what makes this look like a molecule rather than a cloud of dots: the bonds from the data file are drawn, sized relative to the atoms.",
               "notes": [
-                { "arg": 4, "note": "steps between images",
-                  "alternatives": "Fewer steps gives a smoother animation and a great many files; 500 over 15000 steps is thirty frames." },
-                { "arg": 17, "note": "the camera angle",
-                  "alternatives": "`view 0 90` looks at the tube side-on, which is the direction it is about to be stretched in." } ] },
-            { "text": "dump_modify viz pad 9 backcolor white adiam 1 0.85 bdiam 1 1.0", "together": true,
-              "explain": "`pad 9` zero-pads the frame numbers so they sort correctly; the rest sets the background and the drawn diameters of atoms and bonds." }
+                {
+                  "arg": 4,
+                  "note": "steps between images",
+                  "alternatives": "Fewer steps gives a smoother animation and a great many files; 500 over 15000 steps is thirty frames."
+                },
+                {
+                  "arg": 17,
+                  "note": "the camera angle",
+                  "alternatives": "`view 0 90` looks at the tube side-on, which is the direction it is about to be stretched in."
+                }
+              ]
+            },
+            {
+              "text": "dump_modify viz pad 9 backcolor white adiam 1 0.85 bdiam 1 1.0",
+              "explain": "`pad 9` zero-pads the frame numbers so they sort correctly; the rest sets the background and the drawn diameters of atoms and bonds.",
+              "together": true
+            }
           ]
         },
         {
-          "id": "a5-s3",
+          "id": "a7-s3",
           "kind": "SHOW",
           "title": "Report the right temperature",
           "teach": "This step replaces `run 0 post no` -- the single-point check has done its job, and from here the script actually runs.",
@@ -346,107 +527,156 @@
           "anchor": "editor",
           "before": "run 0 post no",
           "commands": [
-            { "text": "compute Tmid cnt_mid temp",
+            {
+              "text": "compute Tmid cnt_mid temp",
               "explain": "The temperature of the middle group alone.",
-              "concept": "subset-thermostat" },
-            { "text": "thermo 100",
-              "explain": "Report every 100 steps, and report the step, the temperature, the total energy, and your two variables." },
-            { "text": "thermo_style custom step temp etotal v_Lcnt v_Fcnt", "together": true,
-              "explain": "`v_Lcnt` and `v_Fcnt` put the length and the force in the output, which is what makes them appear in the Charts window." },
-            { "text": "thermo_modify temp Tmid line yaml",
+              "concept": "subset-thermostat"
+            },
+            {
+              "text": "thermo 100",
+              "explain": "Report every 100 steps, and report the step, the temperature, the total energy, and your two variables."
+            },
+            {
+              "text": "thermo_style custom step temp etotal v_Lcnt v_Fcnt",
+              "explain": "`v_Lcnt` and `v_Fcnt` put the length and the force in the output, which is what makes them appear in the Charts window.",
+              "together": true
+            },
+            {
+              "text": "thermo_modify temp Tmid line yaml",
               "explain": "Two things at once. `temp Tmid` makes the `temp` column report the middle group's temperature instead of the whole system's -- with a fifth of the tube frozen, the system temperature is not a meaningful number.\n\n`line yaml` switches the output to YAML, which the GUI reads directly: the Output window's right-click menu will export it, and the Charts window can plot it.",
-              "concept": "subset-thermostat" },
-            { "text": "timestep 1.0",
+              "concept": "subset-thermostat"
+            },
+            {
+              "text": "timestep 1.0",
               "explain": "One femtosecond, the usual choice for an all-atom force field in real units.",
               "notes": [
-                { "arg": 1, "note": "the timestep, in femtoseconds",
-                  "alternatives": "Carbon-carbon bond vibrations are the fastest motion here, with a period around 20 fs, so 1 fs samples them roughly twenty times per oscillation." } ] }
+                {
+                  "arg": 1,
+                  "note": "the timestep, in femtoseconds",
+                  "alternatives": "Carbon-carbon bond vibrations are the fastest motion here, with a period around 20 fs, so 1 fs samples them roughly twenty times per oscillation."
+                }
+              ]
+            }
           ]
         },
         {
-          "id": "a5-s3b",
+          "id": "a7-s4",
           "kind": "SHOW",
           "title": "Retire the single-point check",
           "teach": "`run 0 post no` has done its job. It let you check the atom counts without simulating anything; from here the script actually runs.\n\nThis command takes its place, which is why it is the only one in this step that does not go above it.",
           "doc_link": "run",
           "anchor": "editor",
           "commands": [
-            { "text": "run 5000",
-              "replaces": "run 0 post no",
-              "explain": "Five picoseconds of equilibration before anything is pulled, so the tube reaches 300 K and settles." }
+            {
+              "text": "run 5000",
+              "explain": "Five picoseconds of equilibration before anything is pulled, so the tube reaches 300 K and settles.",
+              "replaces": "run 0 post no"
+            }
           ]
         },
         {
-          "id": "a5-s4",
+          "id": "a7-s5",
           "kind": "OBSERVE",
           "title": "Let it settle",
+          "teach": "Five picoseconds of equilibration before anything is pulled.",
           "anchor": "run",
-          "teach": "Nothing dramatic should happen. The temperature climbs to 300 K, the length hovers around its resting value, and the force wanders around zero.\n\nThis is the baseline every later number is measured against.",
           "call_to_action": "Press the Run button.",
-          "expect": "temperature reaching 300 K, Lcnt roughly constant",
+          "predict": "the middle of the tube was given velocities for 300 K and the two ends were frozen. Do you expect the reported temperature to start at 300 K, above it, or below it?",
+          "expect": "Below, then climbing to 300 K. The velocities put kinetic energy in, but half of it converts to potential energy as the atoms move off their ideal positions -- equipartition takes it back to roughly half the starting figure before the thermostat pulls it up to target.",
           "wait_after_run": true,
           "checkpoint": true
         }
       ]
     },
-
     {
-      "id": "act6",
+      "id": "act8",
       "title": "Pull",
       "steps": [
         {
-          "id": "a6-s1",
+          "id": "a8-s1",
           "kind": "SHOW",
           "title": "Move the ends apart",
           "teach": "The `setforce` fixes are still in place, so nothing the tube does can move its ends. Changing the velocity is therefore the whole deformation: the ends will move apart at a fixed speed no matter how hard the tube pulls back.",
           "doc_link": "velocity",
           "anchor": "editor",
           "commands": [
-            { "text": "velocity cnt_top set 0.0005 0 0",
+            {
+              "text": "velocity cnt_top set 0.0005 0 0",
               "explain": "Half a thousandth of an angstrom per femtosecond, each way -- 100 meters per second of separation.\n\nThat is enormously faster than any real tensile test, and it is the usual compromise: slow enough that the tube stays near equilibrium, fast enough to reach breaking strain within a simulation you can afford.",
               "concept": "immobilize",
               "notes": [
-                { "arg": 4, "note": "the velocity, in angstroms per femtosecond",
-                  "alternatives": "Pull harder and the tube has less time to relax between steps, so it appears stiffer and stronger than it is -- a real effect in these simulations, not a bug." } ] },
-            { "text": "velocity cnt_bot set -0.0005 0 0", "together": true,
-              "explain": "The other end, the other way." },
-            { "text": "run 10000",
-              "explain": "Ten picoseconds of pulling, which takes the tube well past 15% strain." }
+                {
+                  "arg": 4,
+                  "note": "the velocity, in angstroms per femtosecond",
+                  "alternatives": "Pull harder and the tube has less time to relax between steps, so it appears stiffer and stronger than it is -- a real effect in these simulations, not a bug."
+                }
+              ]
+            },
+            {
+              "text": "velocity cnt_bot set -0.0005 0 0",
+              "explain": "The other end, the other way. Note the minus sign: the two ends move apart, so the tube is stretched rather than dragged.",
+              "hint": "The mirror of the line above, with the other group and the opposite sign.",
+              "typed": true,
+              "together": false
+            },
+            {
+              "text": "run 10000",
+              "explain": "Ten picoseconds of pulling, which takes the tube well past 15% strain."
+            }
           ]
         },
         {
-          "id": "a6-s2",
+          "id": "a8-s2",
           "kind": "OBSERVE",
           "title": "Stretch it",
-          "anchor": "run",
           "teach": "This is the run the whole script was built for.",
+          "anchor": "run",
           "call_to_action": "Press the Run button.",
-          "expect": "Lcnt rising steadily, Fcnt climbing with it"
+          "predict": "you are pulling the ends apart at a constant speed. What shape do you expect the *force* curve to be -- flat, a straight rise, or a rise that gets steeper?",
+          "expect": "A rise that gets steeper. The length rises linearly because you imposed that, but the harmonic bonds stiffen as they stretch, so the force climbs faster than linearly. And it never falls.",
+          "wait_after_run": true
         },
         {
-          "id": "a6-s3",
+          "id": "a8-s3",
           "kind": "OBSERVE",
           "title": "A straight line, and a curve",
-          "anchor": "chart",
           "teach": "`v_Lcnt` rises **linearly** once the pulling starts, and it should: you imposed a constant velocity, and the ends had no choice.\n\n`v_Fcnt` is the interesting one. It climbs, and it climbs faster than linearly, because the harmonic bonds stiffen as they stretch.\n\nAnd it never falls. Plot it as long as you like -- the tube will not break. Every bond in this model is a spring whose energy grows without limit, so the tube simply gets harder to pull. Making bonds that *can* break needs a different kind of potential, which is the second half of this tutorial.",
+          "anchor": "chart",
           "call_to_action": "Select v_Lcnt and then v_Fcnt in the Charts window.",
-          "expect": "a straight Lcnt and a rising, steepening Fcnt",
           "checkpoint": true
         },
         {
-          "id": "a6-s4",
+          "id": "a8-s4",
           "kind": "OBSERVE",
           "title": "See it deform",
-          "anchor": "image",
           "teach": "The Slide Show window holds the thirty frames the `dump image` command wrote. Play them and watch the tube thin as it lengthens.\n\nThe ends stay rigid -- they are the atoms you froze and then moved -- and the damage from the deleted atoms shows up as the places where the structure distorts most.",
+          "anchor": "image",
           "call_to_action": "Open the Slide Show window from the View menu."
         },
         {
-          "id": "a6-s5",
+          "id": "a8-s5",
+          "kind": "OBSERVE",
+          "title": "Pull it faster",
+          "teach": "One change, one re-run, one comparison -- which is how most simulation work actually goes.\n\nThe speed you just used, 0.0005 angstroms per femtosecond, is about 100 metres per second. That is enormously faster than any real tensile test, and the choice matters: a tube pulled faster has less time to relax between steps, so it *appears* stiffer than it is. This is a real effect in these simulations, not an artefact to be ignored.\n\nRaise the speed with the control below, run again, and compare the force curve with the one you already have.",
+          "anchor": "editor",
+          "call_to_action": "Raise the speed, press Run, and compare the two force curves.",
+          "tune": {
+            "command": "velocity",
+            "arg": 4,
+            "from": 0.0005,
+            "to": 0.002,
+            "min": 0.0001,
+            "max": 0.005,
+            "decimals": 4,
+            "label": "Pull speed (A/fs):"
+          }
+        },
+        {
+          "id": "a8-s6",
           "kind": "OBSERVE",
           "title": "It is yours now",
+          "teach": "Two more worth trying.\n\n**Damage it more.** Raise the deletion fraction from 0.02 and watch the force curve fall away from the one you have. A tube with more holes fails at a lower stress.\n\n**Change the seed** on `delete_atoms` and re-run with the same fraction. Same amount of damage, a different tube, a different curve -- which is the reminder that one trajectory is one sample and not an answer.\n\nThe second half of this tutorial swaps the harmonic bonds for the AIREBO reactive force field, where bonds break under strain and the force curve finally comes back down.",
           "anchor": "editor",
-          "teach": "Things worth trying:\n\n**Pull more gently.** Take the velocities to 0.0001 and lengthen the run to match. The tube has more time to relax at each extension, and the measured stiffness drops.\n\n**Damage it more.** Raise the deletion fraction from 0.02 and see the force curve fall away from the perfect-tube line.\n\n**Change the seed** on `delete_atoms` and re-run. Same amount of damage, different tube, different curve -- which is a reminder that one trajectory is one sample, not an answer.\n\nThe second half of this tutorial swaps the harmonic bonds for the AIREBO reactive force field, where bonds break under strain and the force curve finally comes back down.",
           "call_to_action": "Change something and run it again."
         }
       ]

@@ -109,7 +109,7 @@ const QSet<QString> STEP_KEYS = {
     QStringLiteral("checkpoint"), QStringLiteral("anchor"),   QStringLiteral("call_to_action"),
     QStringLiteral("open_file"),  QStringLiteral("tune"),
     QStringLiteral("wait_after_run"), QStringLiteral("before"),
-    QStringLiteral("highlight"),
+    QStringLiteral("highlight"), QStringLiteral("predict"),
 };
 const QSet<QString> TUNE_KEYS = {
     QStringLiteral("command"), QStringLiteral("arg"), QStringLiteral("from"),
@@ -119,7 +119,7 @@ const QSet<QString> TUNE_KEYS = {
 const QSet<QString> COMMAND_KEYS = {
     QStringLiteral("text"),    QStringLiteral("explain"), QStringLiteral("notes"),
     QStringLiteral("concept"), QStringLiteral("typed"),  QStringLiteral("together"),
-    QStringLiteral("replaces"),
+    QStringLiteral("replaces"), QStringLiteral("hint"),
 };
 const QSet<QString> NOTE_KEYS = {
     QStringLiteral("arg"),
@@ -312,6 +312,7 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readBool(obj, QStringLiteral("typed"), path, ctx, cmd.typed);
     readBool(obj, QStringLiteral("together"), path, ctx, cmd.together);
     readString(obj, QStringLiteral("replaces"), path, ctx, cmd.replaces);
+    readString(obj, QStringLiteral("hint"), path, ctx, cmd.hint);
     if (readString(obj, QStringLiteral("concept"), path, ctx, cmd.conceptId))
         usedConcepts.insert(cmd.conceptId);
 
@@ -321,6 +322,10 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
         ctx.error(sub(path, QStringLiteral("explain")),
                   QStringLiteral("a typed command is never shown, so it needs an explanation "
                                  "the user can work from"));
+    if (cmd.typed && cmd.hint.isEmpty())
+        ctx.error(sub(path, QStringLiteral("hint")),
+                  QStringLiteral("a typed command needs a hint: a drill with nothing to fall "
+                                 "back on is a memory test rather than reinforcement"));
 
     if (cmd.text.contains(QLatin1Char('\n')))
         ctx.error(sub(path, QStringLiteral("text")),
@@ -358,6 +363,13 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("title"), path, ctx, step.title, true);
     readString(obj, QStringLiteral("teach"), path, ctx, step.teach);
     readString(obj, QStringLiteral("expect"), path, ctx, step.expect);
+    readString(obj, QStringLiteral("predict"), path, ctx, step.predict);
+    // a question with no answer is worse than neither: the user commits to a
+    // guess and is never told whether it was right
+    if (!step.predict.isEmpty() && step.expect.isEmpty())
+        ctx.error(sub(path, QStringLiteral("expect")),
+                  QStringLiteral("a step that asks the user to predict has to say what actually "
+                                 "happens, or the prediction is never resolved"));
     readBool(obj, QStringLiteral("checkpoint"), path, ctx, step.checkpoint);
     readBool(obj, QStringLiteral("wait_after_run"), path, ctx, step.waitAfterRun);
     readBool(obj, QStringLiteral("run_after_insert"), path, ctx, step.runAfterInsert);
@@ -747,9 +759,17 @@ TutorialContent parseTutorialJson(const QByteArray &bytes, QList<ContentIssue> *
             }
     }
 
-    // a step that hands the user the Run button has to come after something has
-    // been put in the script, or they would be running an empty buffer
-    int commandsSoFar = 0;
+    // A step that hands the user the Run button has to come after something has
+    // been put in the script, or they would be running an empty buffer -- unless
+    // the tutorial's script arrives complete, in which case running it before
+    // touching it is the whole point of the style.  A step naming a line with
+    // "before", or ringing one with "highlight", is the signal that it does.
+    bool scriptArrivesComplete = false;
+    for (const auto &act : out.actlist)
+        for (const auto &step : act.steps)
+            if (!step.before.isEmpty() || !step.highlight.isEmpty()) scriptArrivesComplete = true;
+
+    int commandsSoFar = scriptArrivesComplete ? 1 : 0;
     for (const auto &act : out.actlist) {
         for (const auto &step : act.steps) {
             if (step.anchor == StepAnchor::Run && commandsSoFar == 0)

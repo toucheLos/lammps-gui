@@ -112,6 +112,10 @@ struct CommandLine {
     /// for reinforcement: the line is not written into the editor, the callout
     /// describes it instead, and what the user types is compared word by word.
     bool typed = false;
+    /// nudge offered on request during a typed drill, short of the answer.
+    /// A drill with nothing to fall back on is a memory test the user did not
+    /// sign up for, so a typed command is required to carry one.
+    QString hint;
     /// present this command together with the one before it, sharing its
     /// explanation.  Commands that serve one purpose belong in one group -- the
     /// two create_atoms lines, a region and its complement -- and in a later
@@ -172,8 +176,12 @@ struct TutorialStep {
     /// file them under.  Mutually exclusive with @ref section.
     QString before;
     QList<CommandLine> commands; ///< the lines to present and insert
-    /// what the user should see once they act; shown after the run rather than
-    /// before it, so it reads as an observation and not as an instruction
+    /// question put to the user *before* they act: what do they think will
+    /// happen?  A stated prediction is one the user can be wrong about, which
+    /// is what turns watching a run into a test of their own understanding.
+    QString predict;
+    /// what the user should see, revealed *after* they act.  The answer to
+    /// @ref predict, and meaningless without it.
     QString expect;
 
     StepAnchor anchor = StepAnchor::None; ///< what the callout points at

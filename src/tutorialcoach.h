@@ -164,6 +164,15 @@ public:
     void setProgress(int done, int total);
 
     /**
+     * @brief Show a question to answer before acting, or hide it
+     * @param text the question; empty hides the line
+     *
+     * Sits above the call to action and is styled apart from the prose, so it
+     * reads as something to answer rather than something to skim.
+     */
+    void setPrediction(const QString &text);
+
+    /**
      * @brief Set the call to action shown under the prose
      * @param text what the user should do now; empty hides the line
      */
@@ -177,6 +186,12 @@ public:
 
     /** @brief Enable or disable the Back button */
     void setBackEnabled(bool enable);
+    /**
+     * @brief Offer Hint and Show-me alongside a typed drill, or hide them
+     * @param enable true while the user is being asked to type a command
+     */
+    void setDrillHelpers(bool enable);
+
     /**
      * @brief Show an extra button to the left of Back, or hide it
      * @param text label for the button; empty hides it
@@ -224,6 +239,11 @@ signals:
     /** @brief The user pressed the extra button on the completion panel */
     void extraRequested();
 
+    /** @brief The user asked for a hint on a typed drill */
+    void hintRequested();
+    /** @brief The user gave up on a typed drill and wants the answer */
+    void revealRequested();
+
     /**
      * @brief The user applied a new value for the step's tuned argument
      * @param value the number now in the control
@@ -238,9 +258,13 @@ private:
     QLabel *breadcrumbLabel = nullptr; ///< act and step position
     QLabel *titleLabel      = nullptr; ///< step heading
     QTextBrowser *bodyText  = nullptr; ///< the teach text
+    QLabel *predictLabel    = nullptr; ///< question to answer before acting
     QLabel *actionLabel     = nullptr; ///< what to do now
     QLabel *feedbackLabel   = nullptr; ///< response to a typed answer
     QLabel *progressLabel   = nullptr; ///< "step 4 of 21"
+    QWidget *drillRow         = nullptr; ///< Hint and Show-me, typed drills only
+    QPushButton *hintButton   = nullptr; ///< offers a nudge
+    QPushButton *revealButton = nullptr; ///< writes the answer in
     QWidget *tuneRow          = nullptr; ///< prompt + value + Apply, usually hidden
     QLabel *tuneLabel         = nullptr; ///< prompt beside the value
     QDoubleSpinBox *tuneValue = nullptr; ///< the value the user dials in

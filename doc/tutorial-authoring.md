@@ -69,25 +69,26 @@ end -- across a single tutorial, and across the set.
 |---|---|
 | Every act ends with the user doing something that is not pressing Next. | A run, a prediction, an edit, an experiment. |
 | **No more than four consecutive accept-only steps.** Count them. | Four is about where attention detaches; if an act needs more, it is really two acts. |
-| A checkpoint must state what to look for **before** the user looks. | `expect` exists for this; a stated expectation is a prediction the user can be wrong about. |
+| A checkpoint asks **before** the user looks and answers **after**. | `predict` + `expect`. A stated guess is one the user can be wrong about; an unresolved one is worse than none. |
 | Later tutorials fade. Tutorial 1 explains everything; Tutorial 5 hands over a familiar block with a sentence. | Expertise reversal. Grouping (`together`) is the main lever. |
 | Never remove the user's ability to type. | The tour offers a line; accepting it is a convenience, not the only path. |
 
-### The shipped content does not meet this yet
+### Where the shipped content stands
 
-Measured at the time of writing, the longest run of consecutive steps whose
-only action is Next:
+Measured with `doc/tutorial-measure.py` -- the longest run of consecutive steps whose only
+action is Next, and whether any act ends without asking for one:
 
-| Tutorial | Longest accept-only run | Budget |
-|---|---|---|
-| 1 -- Lennard-Jones fluid | 8 (ending at `a4-s2`) | 4 |
-| 2 -- carbon nanotube, part 1 | 9 (ending at `a2-s3`) | 4 |
+| Tutorial | Longest accept-only run | Acts ending passively | Meets the budget |
+|---|---|---|---|
+| 2 -- carbon nanotube, part 1 | 4 | none | yes |
+| 1 -- Lennard-Jones fluid | 8 | 4 of 8 | **no** |
 
-Both were written before this section existed and both are exactly the failure
-the objection describes. The cheapest repair is rung 1 (section 4): a
-prediction sentence before each checkpoint run, and an `expect` the user can be
-wrong about. Neither tutorial should be held up as an example of the structure
-above until that is done. A recount is part of verification (section 10).
+Tutorial 2 was reworked to this standard and is the reference. Tutorial 1 was
+written before the standard existed and still fails it: it is a build-up
+tutorial with long stretches of accept-and-continue and no predictions at all.
+The repair is the same one that worked for Tutorial 2 -- run earlier, cap the
+reading, put a question before each run -- and it has not been done yet. Do not
+copy Tutorial 1's structure.
 
 ### On measuring whether it works
 
@@ -198,28 +199,49 @@ where it matters.
 | Rung | Mechanism | Status | Use |
 |---|---|---|---|
 | 5 | Free modification -- change a value, run, explain the difference | prose + `tune` | closing experiments; the given-and-modify style |
-| 4 | Write it yourself, unaided | `typed` | a command already taught, late in a tutorial |
-| 3 | Fill in the blank / completion | not built | the natural middle rung; **the biggest gap** |
-| 2 | Multiple choice | not built | prediction before a run; recognizing a wrong argument |
-| 1 | Predict, then reveal | `expect` (weakly) | before every checkpoint run; nearly free |
+| 4 | Write it yourself, with Hint and Show-me | `typed` + `hint` | a command already taught, late in a tutorial |
+| 3 | Fill in the blank / completion | not built | the natural middle rung; **the remaining gap** |
+| 2 | Multiple choice | not built | recognizing a wrong argument among plausible ones |
+| 1 | Predict, then reveal | `predict` + `expect` | before every run and every conceptual crux; nearly free |
 | 0 | Accept the offered line | default | first contact with a command |
 
-**Rung 1 is the cheapest win and is underused.** Asking "what will happen to the
-energy?" before Run costs one sentence and converts a passive observation into
-a testable prediction. The research on prediction prompts is favorable and the
-schema already has `expect`. A discarded `PREDICT` verb from the original
-design should come back in this light form.
+**Rung 1 is the cheapest win.** Asking "what will happen to the energy?" before
+Run costs one sentence and converts a passive observation into a testable
+prediction. A step carries `predict` (the question, shown before) and `expect`
+(the answer, revealed after); a `predict` without an `expect` is a load-time
+error, because a question the user answers silently and is never marked on is
+worse than no question.
+
+The loop resolves however the user gets there. On a run-anchored step the
+answer appears when the run finishes and the tour waits so it can be read. On
+any other step the first Next reveals the answer and the second moves on --
+including on a run step the user chose to skip, since nothing is ever locked
+and a skipped question still has to be resolved.
+
+Use it before every run, and at any conceptual crux where a reader is likely to
+hold the wrong model. The best ones in Tutorial 2 are not about the interface:
+"if you keep pulling two bonded atoms apart, does the force level off or keep
+growing?" is the entire point of the tutorial, asked before the answer is given
+away.
 
 **Rung 3 is the missing middle.** Between "here is the line" and "write it from
 memory" sits "here is the line with one argument blanked" -- exactly the
 completion problem the fading literature is built on. When it is built, it
 should be the default for the second half of any tutorial.
 
-**Rungs 2 and 4 need hints and answers.** The current `typed` mechanism is
-deliberately unused because a blank line with nothing on screen to work from is
-not reinforcement -- it is a memory test the user did not sign up for. It
-returns when there is a hint button and a reveal button. Until then, do not
-ship blank-line drills.
+**Rung 4 ships with help.** A typed command must carry a `hint`, and the callout
+offers **Hint** (the nudge) and **Show me** (writes the answer in as a *pending*
+line, so the user still accepts it). A drill with nothing to fall back on is a
+memory test the user did not sign up for, and a user who cannot get past it
+abandons the tutorial rather than learning from it. The missing hint is a
+load-time error.
+
+Pick drills that are *variations* rather than recalls. Tutorial 2's three are
+all mirrors of the line immediately above them -- `group cnt_bot region rbot`
+after `group cnt_top region rtop`, `velocity cnt_bot set 0 0 0` after the same
+for `cnt_top`, and the pulling velocity with the opposite sign. The user has a
+model on screen; what is being practiced is the variation, which is the part
+that carries the meaning.
 
 **Per-tutorial targets.** Rough, and worth arguing with:
 
@@ -422,8 +444,13 @@ sitting on the code, the mixing rules missing from a grouped beat, a wrong
 answer accumulating dead lines. Use `QWidget::grab()` rather than GUI
 automation, so the result is reproducible.
 
-**6. Count the accept-only runs.** Walk the step list and find the longest run
-of steps whose only action is Next. If it exceeds four, restructure (section 1).
+**6. Count the accept-only runs**, with `python3 doc/tutorial-measure.py
+resources/tutorials/<name>.json`. It reports the longest run of steps whose
+only action is Next and whether any act ends on one, and exits non-zero when
+the run exceeds four, so it can be wired into a check. If the
+run exceeds four, restructure (section 1). A step counts as active if it has a
+`predict`, a `tune`, a typed drill, or an anchor on the Run button or an output
+view.
 
 **Harnesses must connect every signal the real application connects.** The flow
 harness went a long time without `retractCommand`, which made every `replaces` a
@@ -495,7 +522,8 @@ key that changes *meaning* comes with a version bump.
 | `highlight` | ring an existing line; requires `anchor: "editor"` |
 | `commands` | SHOW only; an OBSERVE step with commands is an error |
 | `call_to_action` | overrides the generic "press Tab" prompt |
-| `expect` | what the user should see; state it *before* they look |
+| `predict` | question asked before the user acts; requires `expect` |
+| `expect` | the answer, revealed after they act |
 | `wait_after_run` | Run-anchored only; do not advance automatically |
 | `checkpoint` | a milestone worth pausing on |
 | `open_file` | open a different script before this step |
@@ -510,7 +538,8 @@ key that changes *meaning* comes with a version bump.
 | `notes` | `arg`, `note`, `alternatives`, `concept` |
 | `concept` | concept this whole line teaches |
 | `together` | travels with the command before it; never on the first |
-| `typed` | user types it; must stand alone |
+| `typed` | user types it; must stand alone and carry a `hint` |
+| `hint` | nudge offered by the Hint button; required for `typed` |
 | `replaces` | line this supersedes |
 
 ---
@@ -535,8 +564,18 @@ Each cost real time, and most will happen again.
   a button on the callout must go through `deleteLater()`.
 - **`setDecimals()` after `setValue()`** on a `QDoubleSpinBox` re-quantizes the
   value; 0.005 became 0.0100.
-- **Accessors that nothing reads.** `skeletonFile()` and `requiredPackages()`
-  were both parsed, exposed and dead. Either make it load-bearing or delete it.
+- **Accessors that nothing reads.** `skeletonFile()`, `requiredPackages()` and
+  `expect` were all parsed, validated, exposed -- and read by nobody. Three of
+  them. When adding a field, write the code that *shows* it in the same change,
+  or it will sit there looking implemented for months.
+- **Validation rules that assume one tutorial style.** "A Run step must come
+  after something has been written" and "`replaces` must name a line the tour
+  wrote" were both true of build-up tutorials and both wrong for a script that
+  arrives complete. When a rule fires on correct content, check the rule.
+- **A widget's size hint that forgets its optional rows.** `sizeForWidth()`
+  counted the title, body and buttons but not the prediction, feedback, drill
+  or tune rows, so the prose was squeezed into a two-line scrolling box on
+  exactly the steps that had most to say.
 
 ---
 

@@ -107,6 +107,11 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     bodyText->setStyleSheet(QStringLiteral("background: transparent;"));
     outer->addWidget(bodyText, 1);
 
+    predictLabel = new QLabel(this);
+    predictLabel->setWordWrap(true);
+    predictLabel->hide();
+    outer->addWidget(predictLabel);
+
     actionLabel = new QLabel(this);
     actionLabel->setWordWrap(true);
     QFont action = actionLabel->font();
@@ -118,6 +123,23 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     feedbackLabel->setWordWrap(true);
     feedbackLabel->hide();
     outer->addWidget(feedbackLabel);
+
+    // Hint and Show-me, offered only while a typed drill is on screen.  The
+    // drill is a desirable difficulty, not a trap: a user who is stuck has to
+    // be able to get moving again without abandoning the tutorial.
+    drillRow   = new QWidget(this);
+    auto *drl  = new QHBoxLayout(drillRow);
+    drl->setContentsMargins(0, 0, 0, 0);
+    hintButton   = new QPushButton(QStringLiteral("&Hint"), drillRow);
+    revealButton = new QPushButton(QStringLiteral("&Show me"), drillRow);
+    drl->addWidget(hintButton);
+    drl->addWidget(revealButton);
+    drl->addStretch(1);
+    drillRow->hide();
+    outer->addWidget(drillRow);
+
+    connect(hintButton, &QPushButton::clicked, this, &TutorialCoach::hintRequested);
+    connect(revealButton, &QPushButton::clicked, this, &TutorialCoach::revealRequested);
 
     // the tune row: a prompt, a value, and an Apply.  Hidden unless the step
     // asks the user to change a number in a line that is already written.
@@ -179,10 +201,29 @@ void TutorialCoach::setProgress(int done, int total)
                                      : QString());
 }
 
+void TutorialCoach::setPrediction(const QString &text)
+{
+    if (text.isEmpty()) {
+        predictLabel->hide();
+        return;
+    }
+    // deliberately not the same weight as the call to action: this asks for an
+    // answer, and an answer the user gives silently still counts
+    predictLabel->setText(QStringLiteral("<span style=\"color:%1;\">%2 %3</span>")
+                              .arg(QStringLiteral("#7a5c00"),
+                                   QStringLiteral("<b>Before you do:</b>"), text.toHtmlEscaped()));
+    predictLabel->show();
+}
+
 void TutorialCoach::setCallToAction(const QString &text)
 {
     actionLabel->setText(text);
     actionLabel->setVisible(!text.isEmpty());
+}
+
+void TutorialCoach::setDrillHelpers(bool enable)
+{
+    drillRow->setVisible(enable);
 }
 
 void TutorialCoach::setTune(const TuneControl &tune)
@@ -261,10 +302,26 @@ void TutorialCoach::setSide(Side side)
 
 QSize TutorialCoach::sizeForWidth(int width) const
 {
-    const int height = bodyText->document()->size().toSize().height() +
-                       titleLabel->sizeHint().height() + breadcrumbLabel->sizeHint().height() +
-                       actionLabel->sizeHint().height() + nextButton->sizeHint().height() +
-                       6 * Cfg::COACH_MARGIN;
+    // Every optional row has to be counted, not just the ones that were here
+    // when this was written: a prediction, a feedback line, the drill helpers
+    // and the tune control all appear and disappear, and leaving them out
+    // squeezed the prose into a two-line scrolling box on exactly the steps
+    // that had the most to say.
+    const int inner = width - 2 * Cfg::COACH_MARGIN;
+    int height      = bodyText->document()->size().toSize().height() +
+                 nextButton->sizeHint().height() + 6 * Cfg::COACH_MARGIN;
+
+    for (const QWidget *w :
+         {static_cast<QWidget *>(breadcrumbLabel), static_cast<QWidget *>(titleLabel),
+          static_cast<QWidget *>(predictLabel), static_cast<QWidget *>(actionLabel),
+          static_cast<QWidget *>(feedbackLabel), static_cast<QWidget *>(drillRow),
+          static_cast<QWidget *>(tuneRow)}) {
+        if (!w || w->isHidden()) continue;
+        // a wrapping label reports its wrapped height only when asked for one
+        // at the width it will actually get
+        const int h = w->heightForWidth(inner);
+        height += h > 0 ? h : w->sizeHint().height();
+    }
     return {width, qBound(Cfg::COACH_MIN_HEIGHT, height, Cfg::COACH_MAX_HEIGHT)};
 }
 
