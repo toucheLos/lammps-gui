@@ -1,0 +1,410 @@
+{
+  "schema_version": 3,
+  "id": "electrolyte-create",
+  "title": "Tutorial 4 -- Nanosheared electrolyte",
+  "collection": "softmatter",
+  "tutorial": 4,
+  "requires_packages": [
+    "MOLECULE",
+    "KSPACE",
+    "RIGID",
+    "EXTRA-MOLECULE"
+  ],
+  "skeleton": [],
+  "attribution": {
+    "source": "A Set of Tutorials for the LAMMPS Simulation Package (Article v1.0), Simon Gravelle, Cecilia M. S. Alvares, Jacob R. Gissinger, Axel Kohlmeyer; Living J. Comp. Mol. Sci. 2025, 6(1), 3037; https://doi.org/10.33011/livecoms.6.1.3037",
+    "license": "CC BY 4.0",
+    "credit": "Adapted from Tutorial 4 of the LAMMPS Tutorials by Gravelle, Alvares, Gissinger and Kohlmeyer."
+  },
+  "concepts": [
+    {
+      "id": "lattice-units",
+      "term": "lattice units",
+      "explain": "Once a lattice is defined, the numbers in a region command are counted in lattice spacings rather than angstroms. The same three digits mean a very different box depending on whether a lattice was set first."
+    },
+    {
+      "id": "four-point-water",
+      "term": "four-point water",
+      "explain": "The negative charge of the oxygen is moved off the atom onto a massless site nearer the hydrogens. It reproduces water's structure and density better than a three-point model, and LAMMPS places that fourth site itself."
+    }
+  ],
+  "acts": [
+    {
+      "id": "act1",
+      "title": "What you were given",
+      "steps": [
+        {
+          "id": "a1-s0",
+          "kind": "OBSERVE",
+          "title": "A liquid squeezed between two solids",
+          "teach": "Salt water, a nanometre-thick film of it, trapped between two solid walls -- and then the walls are dragged in opposite directions and the fluid is sheared.\n\nThree scripts again. `create.lmp` builds the system, `equilibrate.lmp` settles it, `shearing.lmp` does the experiment and measures the velocity profile across the gap. This first part is the building.\n\nTwo things make it harder than Tutorial 3: a solid surface in contact with a fluid, and a water model with an atom that is not there.",
+          "anchor": "editor_all",
+          "call_to_action": "Read the settings you were given, then press Next."
+        },
+        {
+          "id": "a1-s1",
+          "kind": "OBSERVE",
+          "title": "Periodic in two directions, not three",
+          "teach": "`boundary p p f` makes x and y periodic and z **fixed**. The walls are perpendicular to z, so the film has a top and a bottom; wrapping it in that direction would join the two walls together and there would be no gap left to confine anything.\n\nThat causes a problem for the Coulomb solver, which assumes periodicity in all three directions. `kspace_modify slab 3.0` is the fix: it inserts empty volume above and below the slab -- three times the slab height -- and subtracts the interaction between the periodic images, so z behaves as though it were open.",
+          "anchor": "editor",
+          "highlight": "kspace_modify slab 3.0",
+          "doc_link": "kspace_modify",
+          "call_to_action": "Look at the first and last lines."
+        },
+        {
+          "id": "a1-s2",
+          "kind": "OBSERVE",
+          "title": "The atom that is not there",
+          "teach": "`pair_style lj/cut/tip4p/long O H O-H H-O-H 0.1546 12.0` selects the TIP4P/2005 water model.\n\nA three-point water like Tutorial 3's puts the negative charge on the oxygen. TIP4P moves it onto a **massless fourth site**, 0.1546 angstroms from the oxygen along the bisector of the H-O-H angle. That reproduces water's density and structure noticeably better, at almost no extra cost.\n\nYou never create that site. LAMMPS adds it, keeps it in place, and folds its forces back onto the three real atoms -- which is why the pair style has to be told which types are oxygen and hydrogen, and which bond and angle hold the molecule together.",
+          "anchor": "editor",
+          "highlight": "pair_style lj/cut/tip4p/long O H O-H H-O-H 0.1546 12.0",
+          "doc_link": "pair_style lj/cut/tip4p/long",
+          "predict": "the four names in that line -- `O`, `H`, `O-H`, `H-O-H` -- are type labels, and no `labelmap` command has run yet. Is that a mistake?",
+          "expect": "No. The labels are resolved when the pair style is first *used*, not when the line is read, and the labelmap comes before then. It reads oddly and it is worth knowing, because the error you would get from a genuine typo here does not appear until much later in the script.",
+          "call_to_action": "Look at the pair_style and kspace_style lines."
+        }
+      ]
+    },
+    {
+      "id": "act2",
+      "title": "A box measured in lattice spacings",
+      "steps": [
+        {
+          "id": "a2-s1",
+          "kind": "SHOW",
+          "title": "Set the grid first",
+          "teach": "The walls are going to be crystalline solids, so their atoms need lattice positions to sit on. Defining that lattice changes the meaning of every region command that follows.",
+          "doc_link": "lattice",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "lattice fcc 4.04",
+              "explain": "A face-centred cubic lattice with a spacing of 4.04 angstroms -- roughly aluminium, though nothing here depends on the wall being any particular metal.",
+              "concept": "lattice-units"
+            }
+          ]
+        },
+        {
+          "id": "a2-s2",
+          "kind": "SHOW",
+          "title": "Six spacings across",
+          "teach": "Now the box.",
+          "doc_link": "region",
+          "anchor": "editor",
+          "predict": "`region box block -3 3 -3 3 -5 5` follows a `lattice` command. Are those numbers angstroms?",
+          "expect": "No -- lattice spacings. With `lattice fcc 4.04` the box runs from -12.12 to +12.12 angstroms in x and y, and -20.2 to +20.2 in z. This is one of the easiest mistakes to make in LAMMPS: the same three digits mean a box six times larger than you intended, or six times smaller, depending on whether a lattice was defined first. The `units box` keyword forces angstroms when that is what you want.",
+          "commands": [
+            {
+              "text": "region box block -3 3 -3 3 -5 5",
+              "explain": "Six lattice spacings across in x and y, ten in z -- about 24 by 24 by 40 angstroms.",
+              "concept": "lattice-units",
+              "notes": [
+                {
+                  "arg": 3,
+                  "note": "the six bounds, in lattice spacings",
+                  "alternatives": "Adding `units box` after them switches to angstroms. Worth doing whenever a region is not meant to line up with the lattice.",
+                  "concept": "lattice-units"
+                }
+              ]
+            },
+            {
+              "text": "create_box 5 box &\nbond/types 1 &\nangle/types 1 &\nextra/bond/per/atom 2 &\nextra/angle/per/atom 1 &\nextra/special/per/atom 2",
+              "explain": "Five atom types: oxygen, hydrogen, sodium, chloride, and the wall. One bond type and one angle type, both belonging to water -- the ions are single atoms and the wall is held together by nothing but its own Lennard-Jones interactions.\n\nThe `extra/.../per/atom` keywords reserve room for the bond topology of the water molecules that are about to be stamped in."
+            }
+          ]
+        },
+        {
+          "id": "a2-s3",
+          "kind": "SHOW",
+          "title": "Names for the five species",
+          "teach": "Five atom types, one bond type and one angle type, each given a name. Everything after this point refers to them by name.",
+          "doc_link": "labelmap",
+          "predict": "`Na+` and `Cl-` are being used as type labels. Both contain a character that means something else to LAMMPS. Why is that safe here?",
+          "expect": "Because a label is matched as a whole word in the places labels are expected, not parsed as an expression. It is still worth knowing the limits: a label cannot start with a digit, and cannot contain a space, a hash or a quote -- which is why the angle is `H-O-H` rather than anything more descriptive.",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "labelmap atom 1 O 2 H 3 Na+ 4 Cl- 5 WALL",
+              "explain": "The five atom types. Note that a label may contain characters that would be awkward anywhere else -- `Na+` and `Cl-` are legal labels."
+            },
+            {
+              "text": "labelmap bond 1 O-H",
+              "explain": "And the bond and angle types, which is what the `pair_style` line was referring to before any of these existed.",
+              "together": true
+            },
+            {
+              "text": "labelmap angle 1 H-O-H",
+              "together": true,
+              "explain": "The water angle."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "act3",
+      "title": "Two walls",
+      "steps": [
+        {
+          "id": "a3-s1",
+          "kind": "SHOW",
+          "title": "A slab at the top and one at the bottom",
+          "teach": "Each wall is one lattice spacing thick, and they are placed three spacings above and below the centre -- leaving a gap of six spacings, about 24 angstroms, for the fluid.",
+          "doc_link": "region",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "region rbotwall block -3 3 -3 3 -4 -3",
+              "explain": "The lower slab: the full width of the box in x and y, one spacing thick in z."
+            },
+            {
+              "text": "region rtopwall block -3 3 -3 3 3 4",
+              "explain": "And the upper one, the same thickness at the other end of the gap.",
+              "typed": true,
+              "hint": "The mirror of the line above. Same name pattern, same six-number shape, and the two z bounds are the positive versions of the ones below."
+            },
+            {
+              "text": "region rwall union 2 rbotwall rtopwall",
+              "explain": "Both at once. A `union` region is a region in its own right, and the `2` says how many are being combined.",
+              "notes": [
+                {
+                  "arg": 2,
+                  "note": "how the regions combine",
+                  "alternatives": "`intersect` keeps only what is in all of them. Regions can also be inverted with `side out`, which is how Tutorial 1 made a cylinder's complement."
+                }
+              ]
+            },
+            {
+              "text": "create_atoms WALL region rwall",
+              "explain": "Fill both slabs with wall atoms, one at every lattice site inside them. This is where the `lattice` command pays off: the atoms come out as a proper fcc crystal rather than a random packing, and the two walls are commensurate with the periodic box in x and y, so they have no seam."
+            }
+          ]
+        },
+        {
+          "id": "a3-s2",
+          "kind": "OBSERVE",
+          "title": "Count the wall",
+          "anchor": "run",
+          "teach": "There is no `run` command yet, so pressing Run builds what exists and stops.",
+          "predict": "each wall is 6 by 6 by 1 lattice spacings of fcc, and an fcc cell holds 4 atoms. Roughly how many atoms should the two walls hold between them?",
+          "expect": "Several hundred -- around 300 in total. The arithmetic is not exact, because atoms on a shared face belong to one cell or the other and the periodic boundary decides some of it, which is why the Output window is worth reading rather than the sum being worth trusting.",
+          "call_to_action": "Press the Run button.",
+          "checkpoint": true
+        }
+      ]
+    },
+    {
+      "id": "act4",
+      "title": "Fill the gap",
+      "steps": [
+        {
+          "id": "a4-s1",
+          "kind": "SHOW",
+          "title": "Water between the walls",
+          "teach": "The fluid goes in the space the walls left, and only there.",
+          "doc_link": "create_atoms",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "region rliquid block INF INF INF INF -2 2",
+              "explain": "The gap: the full box in x and y, and from -2 to +2 lattice spacings in z, which sits just inside the two walls."
+            },
+            {
+              "text": "molecule h2omol water.mol",
+              "explain": "The TIP4P water template -- three real atoms, their charges, and the bond and angle that hold them together. The fourth site is not in the file, because LAMMPS supplies it."
+            },
+            {
+              "text": "create_atoms 0 region rliquid mol h2omol 482793",
+              "explain": "Stamp the template onto every lattice site in the gap.\n\nThis is a different mode from Tutorial 3, which placed molecules at random. Here the molecules land on the lattice, which packs them regularly and at a predictable density -- and produces a starting configuration that is too dense and too ordered, both of which the next steps deal with.",
+              "concept": "four-point-water"
+            }
+          ]
+        },
+        {
+          "id": "a4-s2",
+          "kind": "SHOW",
+          "title": "Salt",
+          "teach": "Thirty ions, fifteen of each sign.",
+          "doc_link": "create_atoms",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "create_atoms Na+ random 15 5802 rliquid overlap 0.3 maxtry 500",
+              "explain": "Fifteen sodium ions at random positions in the gap, no closer than 0.3 angstroms to anything already there.",
+              "notes": [
+                {
+                  "arg": 1,
+                  "note": "the type to create, by label",
+                  "alternatives": "This is the same `create_atoms` command as the line above, in a different mode: `random` scatters single atoms, `region` fills lattice sites, and `single` places exactly one."
+                }
+              ]
+            },
+            {
+              "text": "create_atoms Cl- random 15 9012 rliquid overlap 0.3 maxtry 500",
+              "explain": "And fifteen chloride ions, with a different seed so they do not land in the same places.",
+              "typed": true,
+              "hint": "The mirror of the line above: the other ion label, the same count, a different seed, and the same overlap and maxtry."
+            },
+            {
+              "text": "set type Na+ charge 1",
+              "explain": "Give the ions their charges. The water got its charges from the molecule template; these two atoms are bare and would otherwise be neutral.\n\nFifteen of each is not a coincidence. A periodic system with a net charge is not physical, and a kspace solver will either refuse it or quietly neutralize it with a uniform background -- so the two counts have to match unless something else in the system carries the balance."
+            },
+            {
+              "text": "set type Cl- charge -1",
+              "explain": "And the negative one.",
+              "typed": true,
+              "hint": "The mirror of the line above, with the other label and the opposite sign."
+            }
+          ]
+        },
+        {
+          "id": "a4-s3",
+          "kind": "OBSERVE",
+          "title": "Count the fluid",
+          "anchor": "run",
+          "teach": "Run again to see what the gap now holds.",
+          "predict": "the water was stamped onto lattice sites rather than placed at random. Do you expect that to be denser or less dense than liquid water?",
+          "expect": "Denser -- which is why a later step deletes 15% of it. Lattice packing is regular and tight, and a liquid at the right density is neither. Left alone the pressure would be enormous.",
+          "call_to_action": "Press the Run button."
+        }
+      ]
+    },
+    {
+      "id": "act5",
+      "title": "The numbers, and the groups",
+      "steps": [
+        {
+          "id": "a5-s1",
+          "kind": "SHOW",
+          "title": "Two files of settings",
+          "teach": "Masses, pair coefficients, the bond and the angle, and then a dozen group definitions. Both belong in their own files.",
+          "doc_link": "include",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "include parameters.inc",
+              "explain": "Masses for the five types, the Lennard-Jones parameters, and the bond and angle coefficients."
+            },
+            {
+              "text": "include groups.inc",
+              "explain": "Groups for the water, each ion, the two combined, the fluid as a whole, the wall, and -- built from regions -- the top wall and the bottom wall separately. The shearing script needs those last two to pull in opposite directions.",
+              "together": true
+            }
+          ]
+        },
+        {
+          "id": "a5-s2",
+          "kind": "OBSERVE",
+          "title": "One coefficient that is not mixed",
+          "teach": "Open `parameters.inc` and look at the `pair_coeff` lines. Four of them are like-with-like -- O with O, H with H, and so on -- and LAMMPS derives every unlike pair from those by geometric averaging, exactly as in Tutorial 1.\n\nOne line breaks the pattern:\n\n```\npair_coeff O WALL 0.4 2.86645\n```\n\nThe oxygen-wall interaction is written out by hand.",
+          "anchor": "editor",
+          "highlight": "include parameters.inc",
+          "doc_link": "pair_coeff",
+          "predict": "the water-water well depth is 0.185 kcal/mol and the wall-wall is 11.697. What would the mixing rule give for oxygen-wall, and why might that be a problem?",
+          "expect": "The geometric mean of 0.185 and 11.697 is about 1.47 kcal/mol -- eight times water's attraction to itself. The wall would be so hydrophilic that water would form dense frozen layers on it and never behave like a confined liquid. Writing 0.4 by hand makes the surface merely wettable, which is the physics the tutorial is about.",
+          "call_to_action": "Right-click parameters.inc in the editor and view it. Find the pair_coeff O WALL line."
+        }
+      ]
+    },
+    {
+      "id": "act6",
+      "title": "Thin it out and save it",
+      "steps": [
+        {
+          "id": "a6-s1",
+          "kind": "SHOW",
+          "title": "Remove one molecule in seven",
+          "teach": "The lattice packing left the gap too full. Deleting some of the water brings the density down to something a liquid would actually adopt, and does it before the pressure has a chance to blow the system apart.",
+          "doc_link": "delete_atoms",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "delete_atoms random fraction 0.15 yes H2O NULL 482793 mol yes",
+              "explain": "Delete 15% of the water.",
+              "notes": [
+                {
+                  "arg": 3,
+                  "note": "the fraction to remove",
+                  "alternatives": "Chosen by trial: too little and the pressure stays high, too much and a gap opens between the fluid and a wall."
+                },
+                {
+                  "arg": 4,
+                  "note": "whether to delete exactly that fraction",
+                  "alternatives": "`yes` deletes an exact count, unlike Tutorial 2 which used `no` and treated it as a per-atom probability."
+                },
+                {
+                  "arg": 8,
+                  "note": "delete whole molecules, not atoms",
+                  "alternatives": "Without `mol yes` this would remove individual oxygens and hydrogens and leave fragments of water behind, which is not a thing."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a6-s2",
+          "kind": "SHOW",
+          "title": "A picture, and the state",
+          "teach": "One image so you can see what you built, then the state written out for the next script.",
+          "doc_link": "write_data",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "dump mydmp all image 200 myimage-*.ppm type type &\nshiny 0.1 box no 0.01 view 90 0 zoom 1.8",
+              "explain": "`view 90 0` looks at the slab edge-on, which is the only useful angle for a confined film."
+            },
+            {
+              "text": "dump_modify mydmp backcolor white &\nacolor O red adiam O 2 &\nacolor H white adiam H 1 &\nacolor Na+ blue adiam Na+ 2.5 &\nacolor Cl- cyan adiam Cl- 3 &\nacolor WALL gray adiam WALL 3",
+              "explain": "Five species, five colors -- all set by label rather than by number, which is what makes this line readable at all.",
+              "together": true
+            },
+            {
+              "text": "run 0",
+              "explain": "Initialize forces and energies without advancing anything. Required here: `write_data` needs a fully set-up system, and without it the file would be written from a state that had never been checked."
+            },
+            {
+              "text": "write_data create.data nocoeff",
+              "explain": "Write the system out as a text data file.",
+              "together": true,
+              "notes": [
+                {
+                  "arg": 2,
+                  "note": "leave the force field parameters out of the file",
+                  "alternatives": "Without `nocoeff` the coefficients are written into the data file as well, and would then be defined twice -- once from the file and once from `parameters.inc`, which the next script also includes. Keeping them in one place is what lets the parameters be changed without rebuilding the system."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a6-s3",
+          "kind": "OBSERVE",
+          "title": "Build it",
+          "anchor": "run",
+          "teach": "The finished script: a crystalline wall top and bottom, salt water between them, and the whole thing saved.",
+          "predict": "`create.data` will be read by the next script, which also has its own `include parameters.inc`. What do you expect to happen if you forget `nocoeff`?",
+          "expect": "The coefficients get defined twice -- once by the data file and once by the include -- and the second silently overrides the first. It works, which is the problem: two sources of truth that agree today and will not after someone edits one of them.",
+          "call_to_action": "Press the Run button.",
+          "wait_after_run": true,
+          "checkpoint": true
+        },
+        {
+          "id": "a6-s4",
+          "kind": "OBSERVE",
+          "title": "Look at what you made",
+          "anchor": "image",
+          "teach": "Two grey crystalline slabs, a film of red-and-white water between them, and the blue and cyan ions scattered through it.\n\nLook at the edges. The walls run right up to the periodic boundary in x and y with no seam and no gap -- that is the `lattice` command doing its work, and it is why the box width was chosen as a whole number of lattice spacings rather than a round number of angstroms.",
+          "call_to_action": "Open the Image Viewer or the Slide Show from the View menu."
+        },
+        {
+          "id": "a6-s5",
+          "kind": "OBSERVE",
+          "title": "It is yours now",
+          "anchor": "editor",
+          "teach": "Things worth trying before moving on to the equilibration.\n\n**Change the salt concentration.** Ask for 30 of each ion instead of 15 -- but change both, or the system carries a net charge and the solver will complain.\n\n**Make the gap wider.** Move the two wall regions apart and widen `rliquid` to match. A thicker film behaves more like bulk water in the middle, which is the comparison the shearing script is built to make.\n\n**Make the wall hydrophobic.** Drop the `pair_coeff O WALL` well depth from 0.4 to 0.1 and look at the first layer of water in the image. Then try raising it towards the 1.47 the mixing rule would have given.\n\nWhen you are ready, `equilibrate.lmp` relaxes this system and holds it at 300 K.",
+          "call_to_action": "Change something and run it again."
+        }
+      ]
+    }
+  ]
+}
