@@ -294,6 +294,13 @@ bool CodeEditor::markLine(const QString &text)
     return false;
 }
 
+void CodeEditor::setGuideText(const QString &text)
+{
+    if (guide == text) return;
+    guide = text;
+    viewport()->update();
+}
+
 void CodeEditor::clearMarkedLine()
 {
     if (markedLine < 0) return;
@@ -369,6 +376,12 @@ QRect CodeEditor::pendingLineArea() const
         if (const QTextLayout *layout = block.layout())
             for (int l = 0; l < layout->lineCount(); ++l)
                 textWidth = qMax(textWidth, layout->lineAt(l).naturalTextWidth());
+
+        // A guided line is only partly typed, and the faded remainder occupies
+        // the rest of it.  Measuring what has been typed so far would let the
+        // callout be placed over the very text the user is following.
+        if (!guide.isEmpty() && first + i == pendingLine)
+            textWidth = qMax(textWidth, QFontMetricsF(font()).horizontalAdvance(guide));
 
         const QRect line(static_cast<int>(geom.left()), static_cast<int>(geom.top()),
                          static_cast<int>(textWidth), static_cast<int>(geom.height()));
@@ -867,6 +880,29 @@ void CodeEditor::paintEvent(QPaintEvent *event)
     }
 
     QPlainTextEdit::paintEvent(event);
+
+    // The untyped remainder of a guided command, drawn from where the user's
+    // own text ends.  After the base class, so it sits alongside the real text
+    // rather than under it; and only while what they have typed is still a
+    // prefix of the target, because once they diverge the guide would be
+    // pointing at a position their text no longer occupies.
+    if (!guide.isEmpty() && pendingLine >= 0) {
+        const QTextBlock block = document()->findBlockByNumber(pendingLine);
+        if (block.isValid() && block.isVisible()) {
+            const QString typed = block.text();
+            if (guide.startsWith(typed)) {
+                const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
+                QPainter ghost(viewport());
+                ghost.setPen(Coach::guide());
+                ghost.setFont(font());
+                const QFontMetricsF fm(font());
+                ghost.drawText(QPointF(geom.left() + fm.horizontalAdvance(typed),
+                                       geom.top() + fm.ascent()),
+                               guide.mid(typed.size()));
+            }
+        }
+    }
+
     if (variableOverrides.isEmpty()) return;
 
     QPainter painter(viewport());

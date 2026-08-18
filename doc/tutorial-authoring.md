@@ -83,7 +83,7 @@ action is Next, and whether any act ends without asking for one:
 | 5 -- reactive silica, part 1 | 2 | none | yes |
 | 4 -- nanosheared electrolyte, part 1 | 2 | none | yes |
 | 3 -- polymer in water, part 1 | 2 | none | yes |
-| 2 -- carbon nanotube, part 1 | 4 | none | yes |
+| 2 -- carbon nanotube, part 1 | 2 | none | yes, and every command is typed |
 | 1 -- Lennard-Jones fluid | 8 | 4 of 8 | **no** |
 
 Tutorials 2 through 5 were built to this standard and are the reference. Tutorial 1 was
@@ -192,6 +192,25 @@ things to change. This is the unaided-problem stage of the progression and it
 is the part most likely to be cut for time -- do not cut it. Two or three
 items, each one number, each with a stated expectation.
 
+**Ask the three questions about every potential.** The materials-science
+article states this as its recurring theme and it is the heuristic I missed
+longest, so it is a requirement rather than a nicety. Somewhere before the
+tutorial's first real measurement, answer:
+
+1. *What can this kind of potential describe in principle, and what can it
+   not?* -- a property of the functional form, not of the parameters. A
+   harmonic bond cannot break however it is parameterized.
+2. *What was this parameter set fitted to?* -- OPLS-AA to the densities and
+   heats of vaporization of organic liquids; not to bond rupture.
+3. *How well does it reproduce what the user is about to measure?* -- with a
+   published or experimental number to compare against. Tutorial 2 gives the
+   C-C length as 1.4 A against graphite's 1.42, and notes that the stiffness it
+   is about to measure was never fitted at all.
+
+Without these a reader finishes knowing which buttons to press and nothing
+about whether to believe the answer, which is the failure mode this whole
+document exists to avoid.
+
 **Say when a result is illustrative rather than converged.** The articles are
 careful about this; a tutorial that quietly implies a 5000-step run is a
 publishable measurement teaches a bad habit.
@@ -208,6 +227,7 @@ where it matters.
 |---|---|---|---|
 | 5 | Free modification -- change a value, run, explain the difference | prose + `tune` | closing experiments; the given-and-modify style |
 | 4 | Write it yourself, with Hint and Show-me | `typed` + `hint` | a command already taught, late in a tutorial |
+| 3.5 | **Type it with the target faded behind it** | `typed` + `guide` | **the default for a tutorial the user should not be able to idle through** |
 | 3 | Fill in the blank / completion | not built | the natural middle rung; **the remaining gap** |
 | 2 | Multiple choice | not built | recognizing a wrong argument among plausible ones |
 | 1 | Predict, then reveal | `predict` + `expect` | before every run and every conceptual crux; nearly free |
@@ -236,6 +256,22 @@ away.
 memory" sits "here is the line with one argument blanked" -- exactly the
 completion problem the fading literature is built on. When it is built, it
 should be the default for the second half of any tutorial.
+
+**Rung 3.5 is the one to reach for.** `guide` paints the command faintly on the
+line the user is typing, and the faded part shrinks as they get it right. They
+produce every character, but never from memory and never stuck -- which is the
+generation effect at its cheapest point, and the closest thing in software to
+copying something out by hand.
+
+Tab accepts only a line that matches; a wrong one is handed back with the guide
+still showing and the offending word named. Nothing is locked: `Show me` fills
+it in.
+
+It costs one thing, and it is worth knowing before choosing it. A typed command
+has to stand alone, so `together` grouping dissolves -- every command becomes
+its own beat. Tutorial 2 lost fourteen groupings when it was converted. Keep
+the grouped *explanation* in the prose when that happens: the first command of
+a former pair explains both, and the second stays terse.
 
 **Rung 4 ships with help.** A typed command must carry a `hint`, and the callout
 offers **Hint** (the nudge) and **Show me** (writes the answer in as a *pending*
@@ -458,6 +494,12 @@ sitting on the code, the mixing rules missing from a grouped beat, a wrong
 answer accumulating dead lines. Use `QWidget::grab()` rather than GUI
 automation, so the result is reproducible.
 
+**5a. Read the typed/given column.** `tutorial-measure.py` reports how many
+commands the user produces against how many are handed over for a keypress.
+This matters because the `active` count treats pressing Tab as activity, so a
+tutorial can score well and still be one a reader idles through. A tutorial
+whose `given` is large and `typed` is zero is a transcript with a Next button.
+
 **6. Count the accept-only runs**, with `python3 doc/tutorial-measure.py
 resources/tutorials/<name>.json`. It reports the longest run of steps whose
 only action is Next and whether any act ends on one, and exits non-zero when
@@ -552,8 +594,9 @@ key that changes *meaning* comes with a version bump.
 | `notes` | `arg`, `note`, `alternatives`, `concept` |
 | `concept` | concept this whole line teaches |
 | `together` | travels with the command before it; never on the first |
-| `typed` | user types it; must stand alone and carry a `hint` |
-| `hint` | nudge offered by the Hint button; required for `typed` |
+| `typed` | user types it; must stand alone |
+| `guide` | paint the target faded behind what they type; implies `typed`, and replaces the `hint` requirement |
+| `hint` | nudge offered by the Hint button; required for `typed` without `guide` |
 | `replaces` | line this supersedes |
 
 ---

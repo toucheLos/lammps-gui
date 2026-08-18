@@ -119,7 +119,7 @@ const QSet<QString> TUNE_KEYS = {
 const QSet<QString> COMMAND_KEYS = {
     QStringLiteral("text"),    QStringLiteral("explain"), QStringLiteral("notes"),
     QStringLiteral("concept"), QStringLiteral("typed"),  QStringLiteral("together"),
-    QStringLiteral("replaces"), QStringLiteral("hint"),
+    QStringLiteral("replaces"), QStringLiteral("hint"),  QStringLiteral("guide"),
 };
 const QSet<QString> NOTE_KEYS = {
     QStringLiteral("arg"),
@@ -313,6 +313,7 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readBool(obj, QStringLiteral("together"), path, ctx, cmd.together);
     readString(obj, QStringLiteral("replaces"), path, ctx, cmd.replaces);
     readString(obj, QStringLiteral("hint"), path, ctx, cmd.hint);
+    readBool(obj, QStringLiteral("guide"), path, ctx, cmd.guide);
     if (readString(obj, QStringLiteral("concept"), path, ctx, cmd.conceptId))
         usedConcepts.insert(cmd.conceptId);
 
@@ -322,10 +323,16 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
         ctx.error(sub(path, QStringLiteral("explain")),
                   QStringLiteral("a typed command is never shown, so it needs an explanation "
                                  "the user can work from"));
-    if (cmd.typed && cmd.hint.isEmpty())
+    // a guided line carries its own help, so the hint is only required when the
+    // user is being asked to produce the command from memory
+    if (cmd.typed && !cmd.guide && cmd.hint.isEmpty())
         ctx.error(sub(path, QStringLiteral("hint")),
                   QStringLiteral("a typed command needs a hint: a drill with nothing to fall "
                                  "back on is a memory test rather than reinforcement"));
+    if (cmd.guide && !cmd.typed)
+        ctx.error(sub(path, QStringLiteral("guide")),
+                  QStringLiteral("\"guide\" paints the target behind what the user types, so it "
+                                 "only means anything on a \"typed\" command"));
 
     // One command per entry -- but a LAMMPS command may legitimately span
     // several lines with a trailing "&", and splitting those would put half a

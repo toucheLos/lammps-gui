@@ -117,6 +117,12 @@ signals:
     void withdrawCommand();
 
     /**
+     * @brief Paint a target faintly behind the line being typed
+     * @param text the command to guide towards; empty clears the guide
+     */
+    void guideText(const QString &text);
+
+    /**
      * @brief Ring a line already in the script, without writing anything
      * @param text the line to mark; empty clears the mark
      */

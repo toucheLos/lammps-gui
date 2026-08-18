@@ -416,6 +416,18 @@ When you reach the end, *Done* closes the tour and leaves your script open;
 if the next tutorial is available and has a guided tour of its own, the
 final panel offers to start it.
 
+In some tutorials the commands are not handed to you at all.  The line is
+left blank and the command appears faintly behind it as you type, so you
+have something to follow without being given it -- writing a command out is
+a large part of learning it.  `Tab` accepts the line once it
+matches, and tells you which word is wrong when it does not; the
+*Show me* button fills it in if you would rather move on.
+
+The callout can be moved and resized.  Drag it by any bare part of the
+panel, or drag the grip in its lower right corner to resize it.  Once you
+move it, it stays where you put it rather than being repositioned on every
+step; double-click it to hand placement back to the tutorial.
+
 Progress is remembered per tutorial, so closing LAMMPS-GUI and coming
 back offers to resume where you left off or to start over.  Nothing is
 ever locked: you can move forwards or backwards at any point, and the

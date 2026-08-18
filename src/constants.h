@@ -192,6 +192,7 @@ constexpr int COACH_BORDER_WIDTH = 2;   ///< outline of the callout
 constexpr int COACH_RING_WIDTH   = 2;   ///< outline of the highlight ring
 constexpr int COACH_RING_INSET   = 4;   ///< how far the ring stands off its target
 constexpr int COACH_WIDTH        = 380; ///< preferred callout width
+constexpr int COACH_MIN_WIDTH    = 240; ///< narrowest the user may drag it
 constexpr int COACH_MIN_HEIGHT   = 160; ///< shortest the callout may be
 constexpr int COACH_MAX_HEIGHT   = 460; ///< tallest before the body scrolls
 constexpr int COACH_GAP          = 14;  ///< space between callout and its target

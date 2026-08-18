@@ -14,6 +14,7 @@
 #include "constants.h"
 
 #include <QDoubleSpinBox>
+#include <QMouseEvent>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -185,6 +186,83 @@ TutorialCoach::TutorialCoach(QWidget *parent) : QWidget(parent)
     pal.setColor(QPalette::Text, Coach::text());
     pal.setColor(QPalette::ButtonText, Coach::text());
     setPalette(pal);
+}
+
+namespace {
+/// how big the bottom-right corner grab zone is
+constexpr int RESIZE_GRIP = 18;
+} // namespace
+
+void TutorialCoach::releaseGeometry()
+{
+    userGeometry = false;
+}
+
+void TutorialCoach::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    // a press only reaches this widget where no child took it, so the buttons
+    // and the selectable body text keep working untouched
+    const bool corner = event->pos().x() > width() - RESIZE_GRIP &&
+                        event->pos().y() > height() - RESIZE_GRIP;
+    grabbing      = corner ? Grab::Resize : Grab::Move;
+    grabAt        = event->globalPosition().toPoint();
+    grabGeometry  = geometry();
+    event->accept();
+}
+
+void TutorialCoach::mouseMoveEvent(QMouseEvent *event)
+{
+    if (grabbing == Grab::None) {
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+    const QPoint delta = event->globalPosition().toPoint() - grabAt;
+
+    if (grabbing == Grab::Move) {
+        QRect moved = grabGeometry.translated(delta);
+        // never let it be dragged off where it cannot be got back
+        if (parentWidget()) {
+            const QRect room = parentWidget()->rect();
+            moved.moveLeft(qBound(room.left() - moved.width() + RESIZE_GRIP * 4, moved.left(),
+                                  room.right() - RESIZE_GRIP * 4));
+            moved.moveTop(qBound(room.top(), moved.top(), room.bottom() - RESIZE_GRIP * 2));
+        }
+        setGeometry(moved);
+    } else {
+        QRect sized = grabGeometry;
+        sized.setWidth(qMax(Cfg::COACH_MIN_WIDTH, grabGeometry.width() + delta.x()));
+        sized.setHeight(qMax(Cfg::COACH_MIN_HEIGHT, grabGeometry.height() + delta.y()));
+        setGeometry(sized);
+    }
+
+    if (!userGeometry) {
+        userGeometry = true;
+        // the tail pointed at something the callout is no longer beside
+        pointing = Side::None;
+        emit geometryTakenOver();
+    }
+    update();
+    event->accept();
+}
+
+void TutorialCoach::mouseReleaseEvent(QMouseEvent *event)
+{
+    grabbing = Grab::None;
+    QWidget::mouseReleaseEvent(event);
+}
+
+void TutorialCoach::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    // give placement back to the tour
+    if (userGeometry) {
+        userGeometry = false;
+        emit geometryTakenOver();
+    }
+    event->accept();
 }
 
 void TutorialCoach::setContent(const QString &breadcrumb, const QString &title, const QString &body)
@@ -383,6 +461,16 @@ void TutorialCoach::paintEvent(QPaintEvent *event)
     painter.setPen(QPen(Coach::border(), Cfg::COACH_BORDER_WIDTH));
     painter.setBrush(Coach::background());
     painter.drawPath(path);
+
+    // three short strokes in the bottom-right corner, so the resize grip is
+    // discoverable.  Drawn last, with the painter already on this widget --
+    // a second QPainter on the same device would simply refuse to start.
+    painter.setPen(QPen(Coach::border(), 1.0));
+    painter.setBrush(Qt::NoBrush);
+    for (int i = 1; i <= 3; ++i) {
+        const int off = i * 4;
+        painter.drawLine(width() - off - 2, height() - 3, width() - 3, height() - off - 2);
+    }
 }
 
 // Local Variables:

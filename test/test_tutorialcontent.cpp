@@ -779,6 +779,41 @@ TEST(TutorialContentTest, ContinuedCommandsMaySpanLines)
         << qPrintable(formatContentIssues(badIssues));
 }
 
+// "guide" paints the target behind what the user types, so it only means
+// anything on a command the user is producing -- and it carries its own help,
+// which is why it lifts the hint requirement a bare drill has.
+TEST(TutorialContentTest, GuideImpliesTypedAndSuppliesItsOwnHelp)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "group carbon_atoms type 1", "explain": "all of them",
+            "typed": true, "guide": true } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    EXPECT_TRUE(issues.isEmpty()) << qPrintable(formatContentIssues(issues));
+    ASSERT_NE(content.step(0, 0), nullptr);
+    EXPECT_TRUE(content.step(0, 0)->commands.at(0).guide);
+
+    // guiding a command the tour hands over is meaningless
+    const QByteArray notTyped = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "group carbon_atoms type 1", "explain": "all", "guide": true } ] } ] } ]
+    })";
+    QList<ContentIssue> bad;
+    parseTutorialJson(notTyped, &bad);
+    EXPECT_GT(countContentErrors(bad), 0);
+    EXPECT_TRUE(formatContentIssues(bad).contains(QStringLiteral("only means anything")))
+        << qPrintable(formatContentIssues(bad));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

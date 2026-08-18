@@ -11,6 +11,16 @@ import json
 import sys
 
 
+def produced(step):
+    """Commands on this step the user has to produce themselves."""
+    return sum(1 for c in step.get("commands", []) if c.get("typed"))
+
+
+def accepted(step):
+    """Commands handed over for a keypress."""
+    return sum(1 for c in step.get("commands", []) if not c.get("typed"))
+
+
 def passive(step):
     """True when the step's only action is pressing Next."""
     if step.get("predict") or step.get("tune"):
@@ -41,7 +51,13 @@ def main(paths):
         tail = [a["id"] for a in acts[:-1] if passive(a["steps"][-1])]
         total = sum(len(a["steps"]) for a in acts)
         active = sum(1 for a in acts for s in a["steps"] if not passive(s))
+        typed = sum(produced(s) for a in acts for s in a["steps"])
+        given = sum(accepted(s) for a in acts for s in a["steps"])
+        # Pressing Tab counts as "active" above, which flatters a tutorial the
+        # user can idle through.  typed/given is the honest number: how much of
+        # the script they wrote against how much was handed to them.
         print(f"{path.split('/')[-1]:26} steps={total:3} active={active:3} "
+              f"typed={typed:3} given={given:3} "
               f"longest-passive-run={best} ({where or '-'}) "
               f"acts ending passive: {tail or 'none'}")
         worst = max(worst, best)

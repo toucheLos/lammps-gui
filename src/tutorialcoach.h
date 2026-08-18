@@ -47,6 +47,13 @@ inline QColor border()
     return {0xd4, 0xa3, 0x2c};
 }
 /** Fill used to ring a target and to mark the pending line in the editor */
+/// the target text painted behind what the user is typing: visible enough to
+/// follow, faint enough that it never reads as something already written
+inline QColor guide()
+{
+    return {0xb8, 0x96, 0x3a};
+}
+
 inline QColor highlight()
 {
     return {0xff, 0xe9, 0x8c};
@@ -230,7 +237,21 @@ public:
     /** @brief Preferred size for a given available width */
     QSize sizeForWidth(int width) const;
 
+    /**
+     * @brief Whether the user has taken over the callout's position or size
+     *
+     * Once they have, automatic placement stops: a box someone has parked
+     * where they want it should stay there.
+     */
+    bool geometryIsUsers() const { return userGeometry; }
+
+    /** @brief Hand placement back to the tour */
+    void releaseGeometry();
+
 signals:
+    /** @brief The user moved or resized the callout themselves */
+    void geometryTakenOver();
+
     /** @brief The user pressed Next */
     void nextRequested();
     /** @brief The user pressed Back */
@@ -254,6 +275,15 @@ protected:
     /** @brief Paint the panel background, border and pointer tail */
     void paintEvent(QPaintEvent *event) override;
 
+    /** @brief Begin a drag or a corner resize */
+    void mousePressEvent(QMouseEvent *event) override;
+    /** @brief Carry one on */
+    void mouseMoveEvent(QMouseEvent *event) override;
+    /** @brief End it */
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    /** @brief Double-click hands placement back to the tour */
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
+
 private:
     QLabel *breadcrumbLabel = nullptr; ///< act and step position
     QLabel *titleLabel      = nullptr; ///< step heading
@@ -272,6 +302,13 @@ private:
     QPushButton *extraButton = nullptr; ///< completion panel only; usually hidden
     QPushButton *backButton = nullptr; ///< step backwards
     QPushButton *nextButton = nullptr; ///< step forwards
+
+    /// what a press on the bare panel started
+    enum class Grab { None, Move, Resize };
+    Grab grabbing = Grab::None;  ///< drag in progress, if any
+    QPoint grabAt;               ///< cursor position when it began, in global coordinates
+    QRect grabGeometry;          ///< the callout's geometry when it began
+    bool userGeometry = false;   ///< the user has moved or resized it
 
     Side pointing  = Side::None; ///< which edge carries the tail
     int tailOffset = -1;         ///< where along that edge; negative means centred

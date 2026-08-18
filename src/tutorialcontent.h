@@ -112,6 +112,10 @@ struct CommandLine {
     /// for reinforcement: the line is not written into the editor, the callout
     /// describes it instead, and what the user types is compared word by word.
     bool typed = false;
+    /// paint the target faintly behind the line the user is typing, so they
+    /// have something to follow rather than a blank line and their memory.
+    /// Implies @ref typed: there is nothing to guide if the line is handed over.
+    bool guide = false;
     /// nudge offered on request during a typed drill, short of the answer.
     /// A drill with nothing to fall back on is a memory test the user did not
     /// sign up for, so a typed command is required to carry one.

@@ -33,6 +33,7 @@ TutorialView::TutorialView(TutorialEngine *engine, QWidget *host) :
     connect(coach, &TutorialCoach::extraRequested, this, &TutorialView::nextTutorialRequested);
     connect(coach, &TutorialCoach::hintRequested, this, &TutorialView::showHint);
     connect(coach, &TutorialCoach::revealRequested, this, &TutorialView::revealAnswer);
+    connect(coach, &TutorialCoach::geometryTakenOver, this, &TutorialView::reposition);
     connect(engine, &TutorialEngine::stepChanged, this, &TutorialView::showCurrentStep);
 }
 
@@ -111,6 +112,19 @@ void TutorialView::reposition()
     // still produces a sane ring
     QRect targetRect = resolve ? resolve(currentAnchor()).intersected(host->rect()) : QRect();
     spotlight->setTarget(targetRect);
+
+    // Once the user has moved or resized the callout it stays where they put
+    // it.  The ring still follows the step -- it is the box that stops being
+    // the tour's to place.
+    if (coach->geometryIsUsers()) {
+        QRect kept = coach->geometry();
+        kept.moveLeft(qBound(-kept.width() + 4 * Cfg::COACH_GAP, kept.left(),
+                             host->width() - 4 * Cfg::COACH_GAP));
+        kept.moveTop(qBound(0, kept.top(), host->height() - 2 * Cfg::COACH_GAP));
+        coach->setGeometry(kept);
+        coach->raise();
+        return;
+    }
 
     const int width  = qMin(Cfg::COACH_WIDTH, host->width() - 2 * Cfg::COACH_GAP);
     const QSize size = coach->sizeForWidth(width);
@@ -293,10 +307,19 @@ void TutorialView::showCurrentStep()
             // reinforcement: described but never written, so the user produces
             // it themselves.  A blank pending line marks where it goes.
             emit offerCommands(QStringList(), step->section, step->before);
+            const CommandLine *first = engine->nextCommand();
+            const bool guided        = first && first->guide;
+            // a guided line shows the target faded behind what they type; a
+            // recall drill shows nothing and leans on Hint instead
+            emit guideText(guided ? first->text : QString());
             coach->setCallToAction(
-                QStringLiteral("Type it yourself on the highlighted line, then press Tab."));
+                guided ? QStringLiteral("Type it on the highlighted line -- follow the faded "
+                                        "text -- then press Tab.")
+                       : QStringLiteral("Type it yourself on the highlighted line, then press "
+                                        "Tab."));
             coach->setDrillHelpers(true);
         } else {
+            emit guideText(QString());
             emit offerCommands(texts, step->section, step->before);
             // a step that has something particular to say about accepting these
             // lines says it; otherwise the generic prompt, which is right almost
@@ -311,6 +334,7 @@ void TutorialView::showCurrentStep()
         }
     } else {
         coach->setCallToAction(step->callToAction);
+        emit guideText(QString());
     }
     if (group.isEmpty() || !anyTypedInGroup(group)) coach->setDrillHelpers(false);
 
@@ -370,6 +394,9 @@ void TutorialView::commandCommitted(const QString &written)
             emit retractCommand(written);
             emit offerCommands(QStringList() << written, engine->currentStep()->section,
                                engine->currentStep()->before);
+            // the guide goes back up with the attempt, so a user who mistyped
+            // one word can see the target again while they fix it
+            if (cmd->guide) emit guideText(cmd->text);
             return;
         }
         coach->setFeedback(QStringLiteral("That is it."), true);

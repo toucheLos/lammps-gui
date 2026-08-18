@@ -162,6 +162,20 @@ public:
     void clearMarkedLine();
 
     /**
+     * @brief Paint a target faintly behind the line being typed
+     * @param text the command the user is working towards; empty clears it
+     *
+     * The part they have not typed yet is drawn in a faded color from where
+     * their text ends, so there is something to follow rather than a blank
+     * line and their memory.  It is a guide only -- nothing is inserted, and
+     * the line is still accepted by comparing what they actually typed.
+     */
+    void setGuideText(const QString &text);
+
+    /** @brief The target currently being guided towards, if any */
+    const QString &guideText() const { return guide; }
+
+    /**
      * @brief Take a line an interactive tutorial wrote back out again
      * @param text the line as the tutorial wrote it
      * @return true if a matching line was found and removed
@@ -566,6 +580,8 @@ private:
     /// Block number of a line the tour is pointing at but did not write; -1
     /// when nothing is marked.  Never inserted, accepted or withdrawn.
     int markedLine = -1;
+    /// Command the user is being guided to type; painted faded behind them.
+    QString guide;
     bool reformatOnReturn;    ///< Enable auto-reformatting on Enter
     bool automaticCompletion; ///< Enable auto-completion popup
     QString docver;           ///< LAMMPS documentation version string
