@@ -80,12 +80,13 @@ action is Next, and whether any act ends without asking for one:
 
 | Tutorial | Longest accept-only run | Acts ending passively | Meets the budget |
 |---|---|---|---|
+| 5 -- reactive silica, part 1 | 2 | none | yes |
 | 4 -- nanosheared electrolyte, part 1 | 2 | none | yes |
 | 3 -- polymer in water, part 1 | 2 | none | yes |
 | 2 -- carbon nanotube, part 1 | 4 | none | yes |
 | 1 -- Lennard-Jones fluid | 8 | 4 of 8 | **no** |
 
-Tutorials 2, 3 and 4 were built to this standard and are the reference. Tutorial 1 was
+Tutorials 2 through 5 were built to this standard and are the reference. Tutorial 1 was
 written before the standard existed and still fails it: it is a build-up
 tutorial with long stretches of accept-and-continue and no predictions at all.
 The repair is the same one that worked for Tutorial 2 -- run earlier, cap the
@@ -434,7 +435,7 @@ In rough order of how much each is worth.
 Next alone and compare the resulting script with `solution/<name>.lmp`, through
 `doc/tutorial-normalize.py`, which drops comments and blanks, joins `&`
 continuations and collapses whitespace -- so two scripts that agree are giving
-LAMMPS the same commands however they are laid out. Tutorials 2, 3 and 4 all match their
+LAMMPS the same commands however they are laid out. Tutorials 2 through 5 all match their
 solutions command for command. Nothing else comes close as evidence
 that the content is right.
 

@@ -522,6 +522,7 @@ QString LammpsGui::interactiveContentFor(int collection, int tutno)
         if (tutno == 2) return QStringLiteral(":/tutorials/cnt-unbreakable.json");
         if (tutno == 3) return QStringLiteral(":/tutorials/peg-water.json");
         if (tutno == 4) return QStringLiteral(":/tutorials/electrolyte-create.json");
+        if (tutno == 5) return QStringLiteral(":/tutorials/silica-relax.json");
     }
     return {};
 }
