@@ -197,7 +197,7 @@ public:
     bool removeTutorialLine(const QString &text);
 
     /** @brief True while a line is offered but not yet accepted */
-    bool hasPendingLine() const { return pendingLine >= 0; }
+    bool hasPendingLine() const { return !pendingAt.isNull(); }
 
     /**
      * @brief Whether the cursor sits inside the pending group
@@ -581,10 +581,18 @@ private:
 
     int highlight;       ///< Current highlighted line number, NO_HIGHLIGHT if none
     bool highlighterror; ///< Highlighted line marks an error (red) instead of progress
-    /// Block number of the line an interactive tutorial has offered but the
-    /// user has not accepted yet; -1 when nothing is pending.  Tab commits it,
-    /// and only while it is set does Tab mean anything other than reformat.
-    int pendingLine = -1;
+    /// Where the line an interactive tutorial has offered currently sits.  A
+    /// QTextCursor rather than a block number because Qt keeps it valid as the
+    /// document changes: the user is free to add, delete and move lines
+    /// elsewhere in the script, and the tour still knows which line is its own.
+    /// Null when nothing is pending.  Tab commits it, and only while it is set
+    /// does Tab mean anything other than reformat.
+    QTextCursor pendingAt;
+
+    /// Block the pending line is on now, or -1 when nothing is pending.
+    int pendingLine() const;
+    /// Anchor the pending line to a block, or to nothing when given -1.
+    void anchorPendingLine(int block);
     /// number of blocks the pending group covers, starting at pendingLine
     int pendingCount = 0;
     /// Block numbers of lines the tour is pointing at but did not write.

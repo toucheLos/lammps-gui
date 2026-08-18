@@ -220,17 +220,29 @@ void CodeEditor::setPendingLine(const QString &text, const QString &section, con
     if (!before.isEmpty()) {
         for (QTextBlock b = document()->begin(); b.isValid(); b = b.next()) {
             if (b.text().trimmed() != before.trimmed()) continue;
+
+            // Land the command directly after the line that precedes it, not
+            // hard against the anchor.  A script normally has a blank line
+            // before its run command, and inserting at the anchor put every
+            // new command on the far side of that blank -- separated from the
+            // command it follows and jammed against the run.  Step back over
+            // any blank lines and write after the last real one instead, which
+            // leaves the blank where the author put it.
+            QTextBlock at = b;
+            while (at.previous().isValid() && at.previous().text().trimmed().isEmpty())
+                at = at.previous();
+
             // read the number *before* inserting: a QTextBlock handle tracks
             // its position, so afterwards it reports where the target line has
             // been pushed to rather than where the new line landed, and the
             // pending index ends up one line high -- pointing at whatever the
             // file already had above it
-            const int target = b.blockNumber();
-            cursor           = QTextCursor(b);
+            const int target = at.blockNumber();
+            cursor           = QTextCursor(at);
             cursor.movePosition(QTextCursor::StartOfBlock);
             cursor.insertText(text + QStringLiteral("\n"));
-            pendingLine = target;
-            setTextCursor(QTextCursor(document()->findBlockByNumber(pendingLine)));
+            anchorPendingLine(target);
+            setTextCursor(QTextCursor(document()->findBlockByNumber(pendingLine())));
             ensureCursorVisible();
             viewport()->update();
             return;
@@ -261,7 +273,7 @@ void CodeEditor::setPendingLine(const QString &text, const QString &section, con
         cursor = QTextCursor(document()->findBlockByNumber(insertAfter));
         cursor.movePosition(QTextCursor::EndOfBlock);
         cursor.insertText(QStringLiteral("\n") + text);
-        pendingLine = insertAfter + 1;
+        anchorPendingLine(insertAfter + 1);
         setTextCursor(cursor);
         ensureCursorVisible();
         viewport()->update();
@@ -273,10 +285,33 @@ void CodeEditor::setPendingLine(const QString &text, const QString &section, con
         cursor.insertText(QStringLiteral("\n"));
     cursor.insertText(text);
 
-    pendingLine = document()->blockCount() - 1;
+    anchorPendingLine(document()->blockCount() - 1);
     setTextCursor(cursor);
     ensureCursorVisible();
     viewport()->update();
+}
+
+int CodeEditor::pendingLine() const
+{
+    return pendingAt.isNull() ? -1 : pendingAt.blockNumber();
+}
+
+void CodeEditor::anchorPendingLine(int block)
+{
+    if (block < 0) {
+        pendingAt = QTextCursor();
+        return;
+    }
+    const QTextBlock b = document()->findBlockByNumber(block);
+    if (!b.isValid()) {
+        pendingAt = QTextCursor();
+        return;
+    }
+    // Anchored to the document rather than to a number.  Qt moves a cursor
+    // along as text is inserted or removed above it, so the tour keeps track
+    // of its own line even after the user has shifted things around.
+    pendingAt = QTextCursor(b);
+    pendingAt.movePosition(QTextCursor::StartOfBlock);
 }
 
 int CodeEditor::markLines(const QStringList &texts)
@@ -347,7 +382,7 @@ bool CodeEditor::removeTutorialLine(const QString &text)
         else
             cursor.deletePreviousChar(); // last line: take the one before it
 
-        pendingLine = -1; // any pending index is stale once blocks move
+        anchorPendingLine(-1); // the tour no longer owns a line here
         viewport()->update();
         return true;
     }
@@ -356,16 +391,16 @@ bool CodeEditor::removeTutorialLine(const QString &text)
 
 bool CodeEditor::onPendingLine() const
 {
-    if (pendingLine < 0) return false;
+    if (pendingLine() < 0) return false;
     const int block = textCursor().blockNumber();
-    return block >= pendingLine && block < pendingLine + qMax(pendingCount, 1);
+    return block >= pendingLine() && block < pendingLine() + qMax(pendingCount, 1);
 }
 
 QRect CodeEditor::pendingLineArea() const
 {
     QList<int> covered;
-    if (pendingLine >= 0)
-        for (int i = 0; i < qMax(pendingCount, 1); ++i) covered << pendingLine + i;
+    if (pendingLine() >= 0)
+        for (int i = 0; i < qMax(pendingCount, 1); ++i) covered << pendingLine() + i;
     else if (!markedLines.isEmpty())
         covered = markedLines;
     else
@@ -390,7 +425,7 @@ QRect CodeEditor::pendingLineArea() const
         // A guided line is only partly typed, and the faded remainder occupies
         // the rest of it.  Measuring what has been typed so far would let the
         // callout be placed over the very text the user is following.
-        if (!guide.isEmpty() && number == pendingLine) {
+        if (!guide.isEmpty() && number == pendingLine()) {
             // measured the way it is drawn -- bold command word, plain
             // arguments -- so the ring is not a few pixels short of the text
             const int firstSpace = guide.indexOf(QLatin1Char(' '));
@@ -435,9 +470,9 @@ void CodeEditor::setPendingLines(const QStringList &lines, const QString &sectio
     // place the first line the usual way, then append the rest below it: the
     // whole group ends up contiguous and highlighted together
     setPendingLine(flat.first(), section, before);
-    if (pendingLine < 0) return;
+    if (pendingLine() < 0) return;
 
-    QTextBlock block = document()->findBlockByNumber(pendingLine);
+    QTextBlock block = document()->findBlockByNumber(pendingLine());
     QTextCursor cursor(block);
     cursor.movePosition(QTextCursor::EndOfBlock);
     for (int i = 1; i < flat.size(); ++i)
@@ -451,12 +486,12 @@ void CodeEditor::setPendingLines(const QStringList &lines, const QString &sectio
 QStringList CodeEditor::commitPendingLines()
 {
     QStringList out;
-    if (pendingLine < 0) return out;
+    if (pendingLine() < 0) return out;
     for (int i = 0; i < qMax(pendingCount, 1); ++i) {
-        const QTextBlock b = document()->findBlockByNumber(pendingLine + i);
+        const QTextBlock b = document()->findBlockByNumber(pendingLine() + i);
         if (b.isValid()) out << b.text();
     }
-    pendingLine  = -1;
+    anchorPendingLine(-1);
     pendingCount = 0;
     viewport()->update();
     emit pendingLineCommitted(out.join(QLatin1Char('\n')));
@@ -465,10 +500,10 @@ QStringList CodeEditor::commitPendingLines()
 
 QString CodeEditor::commitPendingLine()
 {
-    if (pendingLine < 0) return {};
-    const QTextBlock block = document()->findBlockByNumber(pendingLine);
+    if (pendingLine() < 0) return {};
+    const QTextBlock block = document()->findBlockByNumber(pendingLine());
     const QString text     = block.isValid() ? block.text() : QString();
-    pendingLine            = -1;
+    anchorPendingLine(-1);
     pendingCount           = 0;
     viewport()->update();
     emit pendingLineCommitted(text);
@@ -477,17 +512,17 @@ QString CodeEditor::commitPendingLine()
 
 void CodeEditor::clearPendingLine()
 {
-    if (pendingLine < 0) return;
+    if (pendingLine() < 0) return;
     // take the group out from the bottom up, so the block numbers above stay put
     for (int i = qMax(pendingCount, 1) - 1; i > 0; --i) {
-        const QTextBlock extra = document()->findBlockByNumber(pendingLine + i);
+        const QTextBlock extra = document()->findBlockByNumber(pendingLine() + i);
         if (!extra.isValid()) continue;
         QTextCursor cursor(extra);
         cursor.select(QTextCursor::BlockUnderCursor);
         cursor.removeSelectedText();
     }
-    const QTextBlock block = document()->findBlockByNumber(pendingLine);
-    pendingLine            = -1;
+    const QTextBlock block = document()->findBlockByNumber(pendingLine());
+    anchorPendingLine(-1);
     pendingCount           = 0;
     if (block.isValid()) {
         // take the whole line and the newline that introduced it, so
@@ -742,7 +777,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *event)
     // Shift+Tab steps an interactive tutorial backwards, so the keyboard can
     // drive the tour in both directions without reaching for the callout.  With
     // no tutorial running it keeps its usual meaning.
-    if (key == Qt::Key_Backtab && pendingLine >= 0) {
+    if (key == Qt::Key_Backtab && pendingLine() >= 0) {
         emit tutorialBackRequested();
         return;
     }
@@ -883,14 +918,14 @@ void CodeEditor::paintEvent(QPaintEvent *event)
 {
     // the pending line is filled *before* the base class paints, so the text
     // and its syntax highlighting draw on top of the marker rather than under it
-    if (pendingLine >= 0 || !markedLines.isEmpty()) {
+    if (pendingLine() >= 0 || !markedLines.isEmpty()) {
         QPainter marker(viewport());
         // a marked line is one the tour is explaining rather than offering, so
         // it gets the same band: to the user both mean "this is what we are
         // talking about"
         QList<int> bands;
-        if (pendingLine >= 0)
-            for (int i = 0; i < qMax(pendingCount, 1); ++i) bands << pendingLine + i;
+        if (pendingLine() >= 0)
+            for (int i = 0; i < qMax(pendingCount, 1); ++i) bands << pendingLine() + i;
         else
             bands = markedLines;
         for (const int number : bands) {
@@ -909,8 +944,8 @@ void CodeEditor::paintEvent(QPaintEvent *event)
     // rather than under it; and only while what they have typed is still a
     // prefix of the target, because once they diverge the guide would be
     // pointing at a position their text no longer occupies.
-    if (!guide.isEmpty() && pendingLine >= 0) {
-        const QTextBlock block = document()->findBlockByNumber(pendingLine);
+    if (!guide.isEmpty() && pendingLine() >= 0) {
+        const QTextBlock block = document()->findBlockByNumber(pendingLine());
         if (block.isValid() && block.isVisible()) {
             const QString typed = block.text();
             const QTextLayout *layout = block.layout();

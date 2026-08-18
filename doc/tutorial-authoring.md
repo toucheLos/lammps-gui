@@ -350,7 +350,7 @@ Three placements, mutually exclusive answers to "where does this go?".
 | Field | Behavior | Use when |
 |---|---|---|
 | `section` | files under a `#` heading, after anything already there | build-up style |
-| `before` | inserts immediately above the named line | given-and-modify style |
+| `before` | inserts after the last real line preceding the named one | given-and-modify style |
 | neither | appends at the end of the buffer | the tail of a script, after the structure exists |
 
 `section` and `before` together is a load-time error. A `section` naming a
@@ -361,6 +361,12 @@ commands would silently append at the end.
 empty buffer, but when the wizard has opened the real file the tour matches
 against the headings *that file* has. Drift means silent appending. For a
 given-and-modify tutorial, `skeleton` is `[]`.
+
+**`before` places after the previous command, not against the anchor.** A
+script normally has a blank line before its run command; inserting hard against
+the anchor put every new command on the far side of that blank, separated from
+the command it follows. The insertion steps back over blank lines and writes
+after the last real one, which leaves the author's blank where it was.
 
 **`replaces` supersedes a line.** The tour otherwise only adds, so a step that
 tells the user a command "takes the place of" an earlier one has to say so in
