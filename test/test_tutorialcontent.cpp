@@ -743,6 +743,42 @@ TEST(TutorialContentTest, ACompleteScriptMayBeRunBeforeAnyCommand)
     EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
 }
 
+// A LAMMPS command may span several lines with a trailing "&".  Splitting those
+// into separate entries would put half a command on screen with nothing
+// sensible to say about it, so a newline is allowed exactly where a
+// continuation marker puts one -- and nowhere else.
+TEST(TutorialContentTest, ContinuedCommandsMaySpanLines)
+{
+    const QByteArray ok = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "create_box 8 box &\nbond/types 7 &\nangle/types 8",
+            "explain": "room for everything" } ] } ] } ]
+    })";
+    QList<ContentIssue> issues;
+    const auto content = parseTutorialJson(ok, &issues);
+    EXPECT_EQ(countContentErrors(issues), 0) << qPrintable(formatContentIssues(issues));
+    ASSERT_NE(content.step(0, 0), nullptr);
+    EXPECT_TRUE(content.step(0, 0)->commands.at(0).text.contains(QLatin1Char('\n')));
+
+    // the same text without the continuation markers is two commands crammed
+    // into one entry, which is what the rule exists to catch
+    const QByteArray bad = R"({
+      "schema_version": 3, "id": "t", "title": "T",
+      "attribution": { "license": "test" },
+      "acts": [ { "id": "a1", "title": "A", "steps": [
+        { "id": "s1", "kind": "SHOW", "title": "S", "teach": "t", "commands": [
+          { "text": "thermo 100\nthermo_style custom step temp", "explain": "two things" } ] } ] } ]
+    })";
+    QList<ContentIssue> badIssues;
+    parseTutorialJson(bad, &badIssues);
+    EXPECT_GT(countContentErrors(badIssues), 0);
+    EXPECT_TRUE(formatContentIssues(badIssues).contains(QStringLiteral("one command per entry")))
+        << qPrintable(formatContentIssues(badIssues));
+}
+
 // Local Variables:
 // c-basic-offset: 4
 // End:

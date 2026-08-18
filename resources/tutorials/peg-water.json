@@ -1,0 +1,424 @@
+{
+  "schema_version": 3,
+  "id": "peg-water",
+  "title": "Tutorial 3 -- Polymer in water",
+  "collection": "softmatter",
+  "tutorial": 3,
+  "requires_packages": [
+    "MOLECULE",
+    "KSPACE",
+    "EXTRA-MOLECULE"
+  ],
+  "skeleton": [],
+  "attribution": {
+    "source": "A Set of Tutorials for the LAMMPS Simulation Package (Article v1.0), Simon Gravelle, Cecilia M. S. Alvares, Jacob R. Gissinger, Axel Kohlmeyer; Living J. Comp. Mol. Sci. 2025, 6(1), 3037; https://doi.org/10.33011/livecoms.6.1.3037",
+    "license": "CC BY 4.0",
+    "credit": "Adapted from Tutorial 3 of the LAMMPS Tutorials by Gravelle, Alvares, Gissinger and Kohlmeyer."
+  },
+  "concepts": [
+    {
+      "id": "type-labels",
+      "term": "type labels",
+      "explain": "A name bound to a numeric type, so commands can say OW instead of 7. The numbers still exist underneath; the labels mean a molecule file and the commands that use it stop depending on which order the types happened to be defined in."
+    },
+    {
+      "id": "molecule-template",
+      "term": "molecule template",
+      "explain": "A file describing one molecule -- its atoms, their types and charges, and which of them are bonded. Loaded once, then stamped into the box as many times as you like."
+    },
+    {
+      "id": "reserve-topology",
+      "term": "reserving room for topology",
+      "explain": "A simulation box is allocated with room for a fixed amount of per-atom bond data. Anything added later has to fit in space reserved when the box was created."
+    }
+  ],
+  "acts": [
+    {
+      "id": "act1",
+      "title": "What you were given",
+      "steps": [
+        {
+          "id": "a1-s0",
+          "kind": "OBSERVE",
+          "title": "Three files, one experiment",
+          "teach": "This tutorial runs across three scripts, and you have all of them.\n\n`water.lmp` builds a box of water and equilibrates it. `merge.lmp` drops a polymer into that box. `pull.lmp` takes hold of the polymer's two ends and stretches it.\n\nEach one starts from the state the last one saved, so nothing is rebuilt twice. This first part is the water.\n\nThe file in front of you holds the settings and nothing else -- no box, no atoms. You will add the rest.",
+          "anchor": "editor_all",
+          "call_to_action": "Read what is there, then press Next."
+        },
+        {
+          "id": "a1-s1",
+          "kind": "OBSERVE",
+          "title": "Atoms with charges on them",
+          "teach": "`atom_style full` is the most capable of the common styles: every atom carries a mass, a **charge**, and can take part in bonds, angles and dihedrals.\n\nTutorial 2's `molecular` style had everything except the charge. Water is held together by its charges as much as its bonds -- that is why it is a liquid at room temperature -- so this is the style it needs.",
+          "anchor": "editor",
+          "highlight": "atom_style full",
+          "doc_link": "atom_style",
+          "call_to_action": "Look at the second line."
+        },
+        {
+          "id": "a1-s2",
+          "kind": "OBSERVE",
+          "title": "Charges do not stop at the cutoff",
+          "teach": "`pair_style lj/cut/coul/long 10` computes two things at once: a Lennard-Jones interaction truncated at 10 angstroms, and the Coulomb interaction between charges.\n\nThe Lennard-Jones part can be cut off because it dies as 1/r^{6}. The Coulomb part cannot -- it falls off as 1/r, so slowly that truncating it produces visible artefacts. That is what `kspace_style ewald 1e-5` is for: the pair style handles charges inside the cutoff, and the solver computes everything beyond it in reciprocal space, to a relative accuracy of 10^{-5}.",
+          "anchor": "editor",
+          "highlight": "kspace_style ewald 1e-5",
+          "doc_link": "kspace_style",
+          "predict": "given that, where do you set the *Coulomb* cutoff -- on `pair_coeff` for each pair of types, or globally on `pair_style`?",
+          "expect": "Globally, on `pair_style`, and nowhere else. With a `coul/long` style there are no per-pair Coulomb parameters at all: atom types choose the Lennard-Jones parameters only. What decides the Coulomb interaction is each atom's charge and the `special_bonds` exclusions.",
+          "call_to_action": "Look at the pair_style and kspace_style lines."
+        },
+        {
+          "id": "a1-s3",
+          "kind": "OBSERVE",
+          "title": "Two kinds of exclusion",
+          "teach": "`special_bonds lj 0.0 0.0 0.5 coul 0.0 0.0 1.0 angle yes` carries two sets of weights, because bonded neighbors have to be excluded from **both** interactions and the right amount to exclude differs.\n\nThe Lennard-Jones weights are the ones you met in Tutorial 2. The Coulomb weights are separate, and the third of them is 1.0 -- atoms three bonds apart feel each other's charges in full.\n\n`angle yes` extends the exclusion to the two outer atoms of every angle, which for water means the two hydrogens do not act on each other through the pair style.",
+          "anchor": "editor",
+          "highlight": "special_bonds lj 0.0 0.0 0.5 coul 0.0 0.0 1.0 angle yes",
+          "doc_link": "special_bonds",
+          "predict": "a water molecule is one oxygen bonded to two hydrogens, so the two hydrogens are two bonds apart. What does `angle yes` change for them?",
+          "expect": "It stops them interacting through the pair style at all. Without it the two hydrogens would repel each other electrostatically -- both are positive -- and fight the angle potential that is already holding the molecule's shape. The bonded terms own the geometry; the pair style should not get a second vote.",
+          "call_to_action": "Look at the last line of the file."
+        }
+      ]
+    },
+    {
+      "id": "act2",
+      "title": "Make room",
+      "steps": [
+        {
+          "id": "a2-s1",
+          "kind": "SHOW",
+          "title": "A box with room to spare",
+          "teach": "A 6 by 3 by 3 nanometre box, and space reserved for everything that will eventually live in it.\n\nThe counts are not for the water alone. The polymer arrives in the *next* script, and a simulation box cannot grow new types after it is created -- so the room for it has to be booked now.",
+          "doc_link": "create_box",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "region box block -30 30 -15 15 -15 15",
+              "explain": "The region, in angstroms: 60 by 30 by 30, which is 6 by 3 by 3 nanometres."
+            },
+            {
+              "text": "create_box 8 box &\nbond/types 7 &\nangle/types 8 &\ndihedral/types 4 &\nextra/bond/per/atom 3 &\nextra/angle/per/atom 6 &\nextra/dihedral/per/atom 10 &\nextra/special/per/atom 14",
+              "explain": "One command, spread over eight lines. A trailing `&` joins a line to the next, which is how a long command stays readable.\n\nEight atom types: two for water, six for the polymer. Seven bond types: one for water, six for the polymer. Eight angle types and four dihedral types, on the same principle -- the water needs one angle and no dihedrals at all.\n\nThe four `extra/.../per/atom` keywords reserve room to *add* bond topology later. Without them, dropping a polymer into this box in the next script would fail for want of space that cannot be allocated after the fact.",
+              "concept": "reserve-topology",
+              "notes": [
+                {
+                  "arg": 1,
+                  "note": "how many atom types will ever exist",
+                  "alternatives": "Locked in here. Any command naming a type above 8 is an error from this point, and adding a ninth means deleting the box and starting again."
+                },
+                {
+                  "arg": 3,
+                  "note": "the trailing ampersand",
+                  "alternatives": "It has to be the *last* character on the line. A space after it, or a comment, and LAMMPS reads the line as finished."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a2-s2",
+          "kind": "SHOW",
+          "title": "The numbers, kept elsewhere",
+          "teach": "Masses, Lennard-Jones parameters, bond stiffnesses and equilibrium lengths, angle constants -- for two force fields, GROMOS for the polymer and SPC/Fw for the water.\n\nThat is a great many numbers, and none of them is the lesson. They live in their own file, exactly as Tutorial 2's parameters did.",
+          "doc_link": "include",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "include parameters.inc",
+              "explain": "Reads the file as though its lines were typed here. It also carries something new, which the next step is about."
+            }
+          ]
+        },
+        {
+          "id": "a2-s3",
+          "kind": "OBSERVE",
+          "title": "Names instead of numbers",
+          "teach": "Open `parameters.inc` and find the line beginning `labelmap`:\n\n```\nlabelmap atom 1 OE 2 C 3 HC 4 H 5 CPos 6 OAlc 7 OW 8 HW\n```\n\nThat binds a **name** to each numeric atom type. From here on, commands can say `OW` where they would have said `7`, and similar maps exist for the bond, angle and dihedral types.\n\nThis is the novelty of Tutorial 3, and it is worth more than convenience. A molecule file written against type labels does not care that water's oxygen happens to be type 7 in *this* box -- it can be dropped into any box that defines an `OW`. Numeric types make every file depend on the order the types were declared in.",
+          "anchor": "editor",
+          "highlight": "include parameters.inc",
+          "doc_link": "labelmap",
+          "predict": "the water is types 7 and 8 and the polymer is 1 to 6. If you had written the water's molecule file with bare numbers instead of labels, what would break when the polymer types were added?",
+          "expect": "Nothing here -- but only by luck. The water was given the last two type numbers, so adding the polymer in front did not disturb it. Had the water been types 1 and 2, inserting six polymer types would have renumbered it and every bare number in the file would now point at the wrong species. Labels remove the coincidence.",
+          "call_to_action": "Right-click parameters.inc in the editor and view it. Find the labelmap line."
+        }
+      ]
+    },
+    {
+      "id": "act3",
+      "title": "Fill it with water",
+      "steps": [
+        {
+          "id": "a3-s1",
+          "kind": "SHOW",
+          "title": "One molecule, stamped 700 times",
+          "teach": "A molecule template describes a single water molecule: three atoms, their types and charges, and the bonds and angle between them. It is loaded once and then used as a stamp.",
+          "doc_link": "molecule",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "molecule h2omol water.mol",
+              "explain": "Load `water.mol` and call it `h2omol`. Nothing is created yet -- this is the template, not the molecules.",
+              "concept": "molecule-template"
+            },
+            {
+              "text": "create_atoms 0 random 700 87910 NULL mol h2omol 454756 &\noverlap 1.0 maxtry 50",
+              "explain": "Place 700 copies of it at random positions and orientations.",
+              "notes": [
+                {
+                  "arg": 1,
+                  "note": "the atom type to create",
+                  "alternatives": "Zero means \"use the types the molecule file specifies\" -- which is the only sensible answer when the template already knows its atoms are an OW and two HWs."
+                },
+                {
+                  "arg": 5,
+                  "note": "the region to fill",
+                  "alternatives": "`NULL` means the whole box. A region here would confine the water to part of it."
+                },
+                {
+                  "arg": 9,
+                  "note": "the closest two molecules may be placed, in angstroms",
+                  "alternatives": "One angstrom is tight -- deliberately so, to reach a realistic density. It is also why the next act has to minimize before doing anything else."
+                },
+                {
+                  "arg": 11,
+                  "note": "how many times to retry a rejected insertion",
+                  "alternatives": "With a tight overlap some attempts fail. Fifty retries usually gets all 700 in, but not always -- which is why the next step is to count them rather than assume."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a3-s2",
+          "kind": "OBSERVE",
+          "title": "Count what you actually got",
+          "anchor": "run",
+          "teach": "There is still no `run` command in the file, so pressing Run builds the system and stops. That is exactly what you want: it is the cheapest way to find out whether the insertion worked.",
+          "predict": "you asked for 700 molecules of a three-atom species. How many atoms should the Output window report -- and are you certain you will get all 700 molecules?",
+          "expect": "2100 atoms, if every insertion succeeded. You are not certain: with `overlap 1.0` and only 50 retries LAMMPS may place fewer, and it warns rather than failing. This is why the count is worth reading every time rather than assumed -- a box that is quietly 5% short is a box at the wrong density.",
+          "call_to_action": "Press the Run button.",
+          "checkpoint": true
+        },
+        {
+          "id": "a3-s3",
+          "kind": "OBSERVE",
+          "title": "Created 2100 atoms",
+          "anchor": "log",
+          "teach": "The Output window reports what was created. If it says fewer than 2100, the insertion gave up early -- raise `maxtry`, or loosen `overlap`, and run it again.\n\nA WARNING appears when LAMMPS fails to create the number of molecules asked for. It is easy to scroll past, which is the reason for stopping here to look.",
+          "call_to_action": "Find the \"Created ... atoms\" line in the Output window."
+        }
+      ]
+    },
+    {
+      "id": "act4",
+      "title": "Untangle it",
+      "steps": [
+        {
+          "id": "a4-s1",
+          "kind": "SHOW",
+          "title": "Pull the overlaps apart",
+          "teach": "Molecules dropped at random with a one-angstrom clearance are far too close in places. Left alone, the first timestep would send them flying.",
+          "doc_link": "minimize",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "group H2O type OW HW",
+              "explain": "A group holding every water atom. You have written a `group ... type ...` before; the new part is naming the types by their **labels**, which is the first place the labelmap earns its keep.",
+              "concept": "type-labels",
+              "typed": true,
+              "hint": "Same shape as Tutorial 2's group command -- a name, then `type`, then which types. Use the two labels from the labelmap, not 7 and 8."
+            },
+            {
+              "text": "minimize 1.0e-4 1.0e-6 100 1000",
+              "explain": "Relax the structure before any dynamics. This is not optional here: it is the price of the tight `overlap` that got the density right."
+            },
+            {
+              "text": "reset_timestep 0",
+              "explain": "Put the step counter back to zero.",
+              "notes": [
+                {
+                  "arg": 1,
+                  "note": "the step number to set",
+                  "alternatives": "Optional, and worth understanding rather than copying. A minimization stops when one of its four criteria is met, so it ends on an arbitrary step number -- and everything downstream that counts steps, such as a `dump` every 250, would then be offset by that arbitrary amount."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a4-s2",
+          "kind": "OBSERVE",
+          "title": "Let it relax",
+          "anchor": "run",
+          "teach": "The minimization runs in a second or two.",
+          "predict": "the molecules were placed with as little as one angstrom between them. Do you expect the starting potential energy to be a modest positive number, or an enormous one?",
+          "expect": "Enormous -- and it falls by orders of magnitude within the first few iterations. One angstrom is well inside the repulsive core of an oxygen, so the initial configuration has pairs sitting almost on top of one another.",
+          "call_to_action": "Press the Run button."
+        }
+      ]
+    },
+    {
+      "id": "act5",
+      "title": "Equilibrate it",
+      "steps": [
+        {
+          "id": "a5-s1",
+          "kind": "SHOW",
+          "title": "Constant temperature and pressure",
+          "teach": "Everything so far has been setup. This is the simulation.\n\nThe box was made 6 by 3 by 3 nanometres and filled with a number of molecules chosen in advance, so its density is whatever those two decisions happened to produce. Rather than calculate the right box size, let the barostat find it.",
+          "doc_link": "fix npt",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "fix mynpt all npt temp 300 300 100 iso 1 1 1000",
+              "explain": "A Nose-Hoover thermostat at 300 K and a barostat at 1 atmosphere.",
+              "notes": [
+                {
+                  "arg": 4,
+                  "note": "target temperature at the start of the run, then at the end, then the damping time in fs",
+                  "alternatives": "100 fs is a reasonable coupling for water. The two temperatures differ only if you want a ramp."
+                },
+                {
+                  "arg": 8,
+                  "note": "isotropic pressure control",
+                  "alternatives": "`iso` rescales all three box dimensions together, keeping its proportions. The next script uses `x 1 1 1000` instead, which lets only the x direction move -- appropriate once there is a polymer lying along it."
+                },
+                {
+                  "arg": 9,
+                  "note": "target pressure, then again, then its damping time",
+                  "alternatives": "A barostat needs a much longer damping time than a thermostat: 1000 fs against 100. The box volume responds far more slowly than the atomic velocities."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a5-s2",
+          "kind": "SHOW",
+          "title": "Watch it and measure it",
+          "teach": "Pictures every 250 steps, and four numbers every 500.",
+          "doc_link": "dump image",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "dump viz all image 250 myimage-*.ppm type type &\nshiny 0.1 box no 0.01 view 0 90 zoom 3 size 1000 500",
+              "explain": "The GUI collects these into the Slide Show window as they are written."
+            },
+            {
+              "text": "dump_modify viz backcolor white &\nacolor OW red acolor HW white &\nadiam OW 3 adiam HW 1.5",
+              "explain": "Oxygen red and large, hydrogen white and small -- the convention every chemist expects. Note that the colors are set **by label**, not by number.",
+              "concept": "type-labels",
+              "together": true
+            },
+            {
+              "text": "thermo 500",
+              "explain": "Report every 500 steps."
+            },
+            {
+              "text": "thermo_style custom step temp etotal vol density",
+              "explain": "Temperature, total energy, and the two that matter here: the box volume in cubic angstroms and the density in grams per cubic centimetre.\n\n`density` is the reason this run exists. It is the number that says whether the box has settled at something like real water.",
+              "together": true
+            }
+          ]
+        },
+        {
+          "id": "a5-s3",
+          "kind": "SHOW",
+          "title": "Fifteen picoseconds",
+          "teach": "One femtosecond per step, fifteen thousand steps.",
+          "doc_link": "run",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "timestep 1.0",
+              "explain": "The usual choice for an all-atom force field in real units.",
+              "typed": true,
+              "hint": "The same value Tutorial 2 used for an all-atom force field in real units: one femtosecond."
+            },
+            {
+              "text": "run 15000",
+              "explain": "Fifteen picoseconds. Long enough for the density to settle, and short enough to sit through."
+            }
+          ]
+        },
+        {
+          "id": "a5-s4",
+          "kind": "OBSERVE",
+          "title": "Equilibrate",
+          "anchor": "run",
+          "teach": "This is the longest run so far, a minute or two on a laptop. Watch the Charts window as it goes.",
+          "predict": "700 water molecules in a 6 by 3 by 3 nanometre box works out at about a third of the density of real water. With the barostat running at 1 atmosphere, what will the box do -- and how will the density curve look?",
+          "expect": "The box shrinks, and the density climbs from roughly 0.35 to about 0.93 g/cm^{3} over the first ten picoseconds before flattening. The temperature gets to 300 K much sooner, within a picosecond or two: velocities equilibrate far faster than a box volume can.",
+          "call_to_action": "Press the Run button.",
+          "wait_after_run": true,
+          "checkpoint": true
+        },
+        {
+          "id": "a5-s5",
+          "kind": "OBSERVE",
+          "title": "Two timescales in one run",
+          "anchor": "chart",
+          "teach": "Switch between `Temp` and `Density` in the Charts window and compare how long each takes to settle.\n\n`Temp` is at its target almost immediately. `Density` takes ten picoseconds. They are the same simulation, and the difference is a property of what is being equilibrated rather than of the thermostat or the barostat: rescaling velocities is instant, squeezing a box of liquid is not.\n\nThis is why an equilibration run has to be judged by its slowest quantity. A run stopped when the temperature looked right would have given you a box a third too large.",
+          "call_to_action": "Compare the Temp and Density curves.",
+          "checkpoint": true
+        }
+      ]
+    },
+    {
+      "id": "act6",
+      "title": "Save it for the next script",
+      "steps": [
+        {
+          "id": "a6-s1",
+          "kind": "SHOW",
+          "title": "Write the state out",
+          "teach": "The next script starts from this box rather than building another one.",
+          "doc_link": "write_restart",
+          "anchor": "editor",
+          "commands": [
+            {
+              "text": "write_restart water.restart",
+              "explain": "A binary file holding the complete state: positions, velocities, box dimensions -- and, unlike the data file of Tutorial 1, the groups, the computes and the atom style as well.\n\nThat is why `merge.lmp` is a single line long. Almost everything you have written here is carried across, and only the things a restart cannot hold have to be repeated.",
+              "notes": [
+                {
+                  "arg": 1,
+                  "note": "the file to write",
+                  "alternatives": "Binary, so it is compact and fast but not portable between LAMMPS versions or platforms. That is the trade against `write_data`, which is text and portable but carries less."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "a6-s2",
+          "kind": "OBSERVE",
+          "title": "Produce the restart",
+          "anchor": "run",
+          "teach": "One more run of the finished script, which now ends by saving its result.",
+          "predict": "the restart carries groups and computes across. Does it also carry the `kspace_style`?",
+          "expect": "No -- and that catches people out. `merge.lmp` has to set `kspace_style` again, and takes the opportunity to switch from Ewald to PPPM, which is much faster for a box this dense.",
+          "call_to_action": "Press the Run button.",
+          "wait_after_run": true,
+          "checkpoint": true
+        },
+        {
+          "id": "a6-s3",
+          "kind": "OBSERVE",
+          "title": "Look inside it",
+          "anchor": "editor",
+          "teach": "`water.restart` is binary, so viewing it as text tells you nothing. LAMMPS-GUI can read it properly: **File** then **Inspect Restart File** opens three windows describing what is in there.\n\nWorth doing once. A restart file is otherwise an opaque blob you are asked to trust, and this is the tutorial where you find out it is not.",
+          "call_to_action": "Open water.restart with File -> Inspect Restart File."
+        },
+        {
+          "id": "a6-s4",
+          "kind": "OBSERVE",
+          "title": "It is yours now",
+          "anchor": "editor",
+          "teach": "Things worth trying before moving on to the polymer.\n\n**Change the molecule count.** Ask for 900 instead of 700 and watch the equilibrium box come out smaller. The density should land in the same place -- if it does not, the run was too short.\n\n**Loosen the overlap.** Raise it from 1.0 to 2.0 and see how many molecules LAMMPS manages to place. Then decide whether raising `maxtry` recovers them.\n\n**Switch the barostat off.** Drop `iso 1 1 1000` and use `fix nvt` instead. The density is then whatever your box size and molecule count happened to give, which is the situation this run exists to avoid.\n\nWhen you are ready, `merge.lmp` adds the polymer.",
+          "call_to_action": "Change something and run it again."
+        }
+      ]
+    }
+  ]
+}

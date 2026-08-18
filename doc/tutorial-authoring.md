@@ -80,10 +80,11 @@ action is Next, and whether any act ends without asking for one:
 
 | Tutorial | Longest accept-only run | Acts ending passively | Meets the budget |
 |---|---|---|---|
+| 3 -- polymer in water, part 1 | 2 | none | yes |
 | 2 -- carbon nanotube, part 1 | 4 | none | yes |
 | 1 -- Lennard-Jones fluid | 8 | 4 of 8 | **no** |
 
-Tutorial 2 was reworked to this standard and is the reference. Tutorial 1 was
+Tutorials 2 and 3 were built to this standard and are the reference. Tutorial 1 was
 written before the standard existed and still fails it: it is a build-up
 tutorial with long stretches of accept-and-continue and no predictions at all.
 The repair is the same one that worked for Tutorial 2 -- run earlier, cap the
@@ -132,6 +133,11 @@ That is the worked-example progression in the source material already.
 |---|---|---|---|
 | **Build-up** | a skeleton of `#` headings (`initial.lmp`) | SHOW steps fill sections in order | a reader's first contact with LAMMPS; when the *structure* of an input file is the lesson |
 | **Given-and-modify** | complete and runnable (`unbreakable.lmp`, matsci `initial.lmp`) | OBSERVE steps read it, then SHOW steps grow it from the middle, then modifications | when the structure is assumed and the *physics* or a specific technique is the lesson |
+| **Partial** | the settings but no system (`water.lmp`) | OBSERVE steps read the settings, then SHOW steps append the rest | a multi-script tutorial where each file starts from the last one's saved state |
+
+The partial style needs no placement machinery at all: with no headings and no
+trailing line to insert above, the commands simply append. Tutorial 3 is three
+scripts of this kind chained through restart files.
 
 **Read the initial file before designing anything.** It decides the shape, and
 you cannot guess which kind you have. Tutorial 1's is six comment headings;
@@ -424,9 +430,15 @@ different medium, which is a different thing from reproducing an article.
 In rough order of how much each is worth.
 
 **1. Diff the tour's output against the article's solution.** Walk the tour on
-Next alone and compare the resulting script with `solution/<name>.lmp`. For
-Tutorial 2 this is identical line for line, ignoring blank lines. Nothing else
-comes close as evidence that the content is right.
+Next alone and compare the resulting script with `solution/<name>.lmp`, through
+`doc/tutorial-normalize.py`, which drops comments and blanks, joins `&`
+continuations and collapses whitespace -- so two scripts that agree are giving
+LAMMPS the same commands however they are laid out. Tutorials 2 and 3 both
+match their solutions command for command. Nothing else comes close as evidence
+that the content is right.
+
+    diff <(python3 doc/tutorial-normalize.py solution/water.lmp) \
+         <(python3 doc/tutorial-normalize.py tour-output.lmp)
 
 **2. Lint expecting 0 errors and 0 warnings.** Warnings matter as much as errors
 here: a schema key missing from its key set is reported as "written for a newer
@@ -533,7 +545,7 @@ key that changes *meaning* comes with a version bump.
 
 | Key | Notes |
 |---|---|
-| `text` | required; one command per entry, no newlines |
+| `text` | required; one command per entry. Newlines allowed only where a trailing `&` continues the command |
 | `explain` | required for `typed`, expected for every first use |
 | `notes` | `arg`, `note`, `alternatives`, `concept` |
 | `concept` | concept this whole line teaches |

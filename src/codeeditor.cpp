@@ -196,6 +196,13 @@ void CodeEditor::seedSkeleton(const QStringList &lines)
 
 void CodeEditor::setPendingLine(const QString &text, const QString &section, const QString &before)
 {
+    // a continued command arriving on its own still has to become several
+    // blocks, and setPendingLines() is what knows how to do that
+    if (text.contains(QLatin1Char('\n'))) {
+        setPendingLines(text.split(QLatin1Char('\n')), section, before);
+        return;
+    }
+
     clearPendingLine();
     pendingCount = 1;
     // an empty text is not a mistake: it offers a *blank* pending line for the
@@ -296,6 +303,16 @@ void CodeEditor::clearMarkedLine()
 
 bool CodeEditor::removeTutorialLine(const QString &text)
 {
+    // a continued command was written as several blocks, so it comes out as
+    // several -- last first, so the earlier matches are still where we left them
+    if (text.contains(QLatin1Char('\n'))) {
+        const QStringList lines = text.split(QLatin1Char('\n'));
+        bool any                = false;
+        for (int i = lines.size() - 1; i >= 0; --i)
+            any = removeTutorialLine(lines.at(i)) || any;
+        return any;
+    }
+
     const QString want = text.trimmed();
     if (want.isEmpty()) return false;
 
@@ -375,17 +392,24 @@ void CodeEditor::setPendingLines(const QStringList &lines, const QString &sectio
         setPendingLine(QString(), section, before);
         return;
     }
+
+    // A single command may span several lines with a trailing "&".  Expand it
+    // here so the pending span counts real blocks: otherwise the highlight
+    // covers the first line only, and Tab accepts only that line.
+    QStringList flat;
+    for (const auto &line : lines)
+        flat += line.split(QLatin1Char('\n'));
     // place the first line the usual way, then append the rest below it: the
     // whole group ends up contiguous and highlighted together
-    setPendingLine(lines.first(), section, before);
+    setPendingLine(flat.first(), section, before);
     if (pendingLine < 0) return;
 
     QTextBlock block = document()->findBlockByNumber(pendingLine);
     QTextCursor cursor(block);
     cursor.movePosition(QTextCursor::EndOfBlock);
-    for (int i = 1; i < lines.size(); ++i)
-        cursor.insertText(QStringLiteral("\n") + lines.at(i));
-    pendingCount = static_cast<int>(lines.size());
+    for (int i = 1; i < flat.size(); ++i)
+        cursor.insertText(QStringLiteral("\n") + flat.at(i));
+    pendingCount = static_cast<int>(flat.size());
     setTextCursor(cursor);
     ensureCursorVisible();
     viewport()->update();

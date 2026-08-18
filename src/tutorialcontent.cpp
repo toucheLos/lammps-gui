@@ -327,10 +327,21 @@ CommandLine parseCommand(const QJsonObject &obj, const QString &path, Ctx &ctx,
                   QStringLiteral("a typed command needs a hint: a drill with nothing to fall "
                                  "back on is a memory test rather than reinforcement"));
 
-    if (cmd.text.contains(QLatin1Char('\n')))
-        ctx.error(sub(path, QStringLiteral("text")),
-                  QStringLiteral("one command per entry: split multi-line blocks so each "
-                                 "line can carry its own explanation"));
+    // One command per entry -- but a LAMMPS command may legitimately span
+    // several lines with a trailing "&", and splitting those would put half a
+    // command on the screen with nothing sensible to say about it.  A newline
+    // is allowed exactly where a continuation marker puts one.
+    if (cmd.text.contains(QLatin1Char('\n'))) {
+        const QStringList lines = cmd.text.split(QLatin1Char('\n'));
+        for (int i = 0; i + 1 < lines.size(); ++i)
+            if (!lines.at(i).trimmed().endsWith(QLatin1Char('&'))) {
+                ctx.error(sub(path, QStringLiteral("text")),
+                          QStringLiteral("one command per entry: split multi-line blocks so each "
+                                         "line can carry its own explanation, unless the line "
+                                         "ends with \"&\" to continue the command"));
+                break;
+            }
+    }
 
     QList<QJsonObject> notes;
     QStringList notepaths;
