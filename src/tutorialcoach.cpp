@@ -289,7 +289,7 @@ void TutorialCoach::setPrediction(const QString &text)
     // answer, and an answer the user gives silently still counts
     predictLabel->setText(QStringLiteral("<span style=\"color:%1;\">%2 %3</span>")
                               .arg(QStringLiteral("#7a5c00"),
-                                   QStringLiteral("<b>Before you do:</b>"), text.toHtmlEscaped()));
+                                   QStringLiteral("<b>Before you do:</b>"), text));
     predictLabel->show();
 }
 
@@ -333,7 +333,7 @@ void TutorialCoach::setFeedback(const QString &text, bool ok)
     // background, which is why they are not taken from the palette
     feedbackLabel->setText(
         QStringLiteral("<span style=\"color:%1;\">%2</span>")
-            .arg(ok ? QStringLiteral("#2e7d32") : QStringLiteral("#a8321e"), text.toHtmlEscaped()));
+            .arg(ok ? QStringLiteral("#2e7d32") : QStringLiteral("#a8321e"), text));
     feedbackLabel->show();
 }
 

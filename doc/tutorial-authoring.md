@@ -372,8 +372,14 @@ are placed relative to the line being replaced. Otherwise the target disappears
 part-way through the step and the rest fall back to appending. This bit
 Tutorial 2's `run 5000`.
 
-**`highlight` rings a line the tour did not write.** For the opening act of a
-given-and-modify tutorial. Requires `anchor: "editor"`.
+**`highlight` rings the lines the tour did not write.** For the opening act of
+a given-and-modify tutorial. Requires `anchor: "editor"`, and takes either one
+line or a list of them.
+
+**Ring every line the step discusses, not just the first.** A step explaining
+`bond_style`, `angle_style`, `dihedral_style` and `improper_style` names all
+four. Ringing one of them tells the reader the other three are something else,
+which is worse than ringing nothing.
 
 ---
 
@@ -575,7 +581,7 @@ key that changes *meaning* comes with a version bump.
 | `doc_link` | `"<command>"` or `"<command> <style>"` |
 | `anchor` | `none`, `editor`, `editor_all`, `run`, `snapshot`, `chart`, `image`, `log` |
 | `section` / `before` | placement; mutually exclusive |
-| `highlight` | ring an existing line; requires `anchor: "editor"` |
+| `highlight` | ring existing lines; a string or a list of them; requires `anchor: "editor"` |
 | `commands` | SHOW only; an OBSERVE step with commands is an error |
 | `call_to_action` | overrides the generic "press Tab" prompt |
 | `predict` | question asked before the user acts; requires `expect` |

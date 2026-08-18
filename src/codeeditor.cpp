@@ -49,6 +49,8 @@
 #include <QVariant>
 #include <QWidget>
 
+#include <algorithm>
+
 CodeEditor::CodeEditor(QWidget *parent) :
     QPlainTextEdit(parent), currentComp(nullptr), commandComp(new QCompleter(this)),
     fixComp(new QCompleter(this)), computeComp(new QCompleter(this)),
@@ -277,21 +279,26 @@ void CodeEditor::setPendingLine(const QString &text, const QString &section, con
     viewport()->update();
 }
 
-bool CodeEditor::markLine(const QString &text)
+int CodeEditor::markLines(const QStringList &texts)
 {
-    const QString want = text.trimmed();
     clearMarkedLine();
-    if (want.isEmpty()) return false;
-
-    for (QTextBlock b = document()->begin(); b.isValid(); b = b.next()) {
-        if (b.text().trimmed() != want) continue;
-        markedLine = b.blockNumber();
-        setTextCursor(QTextCursor(b));
-        ensureCursorVisible();
-        viewport()->update();
-        return true;
+    for (const auto &text : texts) {
+        const QString want = text.trimmed();
+        if (want.isEmpty()) continue;
+        for (QTextBlock b = document()->begin(); b.isValid(); b = b.next())
+            if (b.text().trimmed() == want) {
+                markedLines.append(b.blockNumber());
+                break;
+            }
     }
-    return false;
+    if (!markedLines.isEmpty()) {
+        // scroll to the first of them, so a set near the bottom is visible
+        std::sort(markedLines.begin(), markedLines.end());
+        setTextCursor(QTextCursor(document()->findBlockByNumber(markedLines.first())));
+        ensureCursorVisible();
+    }
+    viewport()->update();
+    return static_cast<int>(markedLines.size());
 }
 
 void CodeEditor::setGuideText(const QString &text)
@@ -303,8 +310,8 @@ void CodeEditor::setGuideText(const QString &text)
 
 void CodeEditor::clearMarkedLine()
 {
-    if (markedLine < 0) return;
-    markedLine = -1;
+    if (markedLines.isEmpty()) return;
+    markedLines.clear();
     viewport()->update();
 }
 
@@ -356,14 +363,17 @@ bool CodeEditor::onPendingLine() const
 
 QRect CodeEditor::pendingLineArea() const
 {
-    const int first = pendingLine >= 0  ? pendingLine
-                      : markedLine >= 0 ? markedLine
-                                        : textCursor().blockNumber();
-    const int count = pendingLine >= 0 ? qMax(pendingCount, 1) : 1;
+    QList<int> covered;
+    if (pendingLine >= 0)
+        for (int i = 0; i < qMax(pendingCount, 1); ++i) covered << pendingLine + i;
+    else if (!markedLines.isEmpty())
+        covered = markedLines;
+    else
+        covered << textCursor().blockNumber();
 
     QRect area;
-    for (int i = 0; i < count; ++i) {
-        const QTextBlock block = document()->findBlockByNumber(first + i);
+    for (const int number : covered) {
+        const QTextBlock block = document()->findBlockByNumber(number);
         if (!block.isValid() || !block.isVisible()) continue;
         const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
 
@@ -380,7 +390,7 @@ QRect CodeEditor::pendingLineArea() const
         // A guided line is only partly typed, and the faded remainder occupies
         // the rest of it.  Measuring what has been typed so far would let the
         // callout be placed over the very text the user is following.
-        if (!guide.isEmpty() && first + i == pendingLine)
+        if (!guide.isEmpty() && number == pendingLine)
             textWidth = qMax(textWidth, QFontMetricsF(font()).horizontalAdvance(guide));
 
         const QRect line(static_cast<int>(geom.left()), static_cast<int>(geom.top()),
@@ -863,15 +873,18 @@ void CodeEditor::paintEvent(QPaintEvent *event)
 {
     // the pending line is filled *before* the base class paints, so the text
     // and its syntax highlighting draw on top of the marker rather than under it
-    if (pendingLine >= 0 || markedLine >= 0) {
+    if (pendingLine >= 0 || !markedLines.isEmpty()) {
         QPainter marker(viewport());
         // a marked line is one the tour is explaining rather than offering, so
         // it gets the same band: to the user both mean "this is what we are
         // talking about"
-        const int first = pendingLine >= 0 ? pendingLine : markedLine;
-        const int count = pendingLine >= 0 ? qMax(pendingCount, 1) : 1;
-        for (int i = 0; i < count; ++i) {
-            const QTextBlock block = document()->findBlockByNumber(first + i);
+        QList<int> bands;
+        if (pendingLine >= 0)
+            for (int i = 0; i < qMax(pendingCount, 1); ++i) bands << pendingLine + i;
+        else
+            bands = markedLines;
+        for (const int number : bands) {
+            const QTextBlock block = document()->findBlockByNumber(number);
             if (!block.isValid() || !block.isVisible()) continue;
             const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
             marker.fillRect(geom.left(), geom.top(), viewport()->width(), geom.height(),

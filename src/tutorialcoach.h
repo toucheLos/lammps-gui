@@ -172,7 +172,7 @@ public:
 
     /**
      * @brief Show a question to answer before acting, or hide it
-     * @param text the question; empty hides the line
+     * @param text the question as rendered rich text; empty hides the line
      *
      * Sits above the call to action and is styled apart from the prose, so it
      * reads as something to answer rather than something to skim.

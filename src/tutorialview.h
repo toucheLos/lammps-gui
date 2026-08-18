@@ -124,9 +124,9 @@ signals:
 
     /**
      * @brief Ring a line already in the script, without writing anything
-     * @param text the line to mark; empty clears the mark
+     * @param texts the lines to mark; empty clears the marks
      */
-    void markLine(const QString &text);
+    void markLines(const QStringList &texts);
 
     /**
      * @brief Take a line the tour wrote back out of the script

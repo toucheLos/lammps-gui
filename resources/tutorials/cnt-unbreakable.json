@@ -80,7 +80,9 @@
           "teach": "`units real` puts distances in angstroms, times in femtoseconds and energies in kcal/mol.\n\nTutorial 1 used `lj`, where everything was dimensionless and no number meant anything in particular. Here the numbers are physical: the bond length below really is 1.4 angstroms, which is the carbon-carbon distance in graphite.\n\nThis is the line that decides what every other number in the file means, which is why it comes first.",
           "doc_link": "units",
           "anchor": "editor",
-          "highlight": "units real",
+          "highlight": [
+            "units real"
+          ],
           "call_to_action": "Look at line 1 of the script."
         },
         {
@@ -90,7 +92,10 @@
           "teach": "`atom_style molecular` gives each atom a molecule ID and the ability to take part in bonds, angles, dihedrals and impropers. `atom_style atomic` from Tutorial 1 could not: a point with a mass has nothing to bond with.\n\n`boundary f f f` makes all three directions **fixed** rather than periodic. The nanotube sits in an empty box with room around it, so nothing should wrap from one face to the other -- and the tube is about to be stretched, which a periodic boundary would fight.",
           "doc_link": "atom_style",
           "anchor": "editor",
-          "highlight": "atom_style molecular",
+          "highlight": [
+            "atom_style molecular",
+            "boundary f f f"
+          ],
           "call_to_action": "Look at lines 2 and 3."
         },
         {
@@ -100,7 +105,12 @@
           "teach": "A molecular force field describes a molecule through the coordinates inside it, and needs a style for each kind:\n\n**`bond_style harmonic`** -- a spring between two bonded atoms:\n\n**U_{b} = k_{b} (r − r_{0})^{2}**\n\n**`angle_style harmonic`** -- the same shape applied to the angle formed by three:\n\n**U_{θ} = k_{θ} (θ − θ_{0})^{2}**\n\n**`dihedral_style opls`** and **`improper_style harmonic`** constrain groups of four atoms, keeping the ring structure flat rather than letting it fold.\n\nLook at the bond energy again. It grows without limit as r increases, so the harder you pull the harder it pulls back, and it can **never break**. That is the whole point of this half of the tutorial -- and what the second half changes.",
           "doc_link": "bond_style harmonic",
           "anchor": "editor",
-          "highlight": "bond_style harmonic",
+          "highlight": [
+            "bond_style harmonic",
+            "angle_style harmonic",
+            "dihedral_style opls",
+            "improper_style harmonic"
+          ],
           "call_to_action": "Look at the four style commands.",
           "predict": "the bond energy is k(r - r_{0})^{2}. If you keep pulling two bonded atoms apart, does the force between them level off, or keep growing?",
           "expect": "It keeps growing, without limit. The energy is a parabola, so the force is a straight line in the extension -- the harder you pull, the harder it pulls back. That is why a harmonic bond can never break, and it is the whole point of this half of the tutorial."
@@ -112,7 +122,10 @@
           "teach": "`pair_style lj/cut 14.0` is the same Lennard-Jones potential as Tutorial 1, with a 14 angstrom cutoff -- but it now has company, and the two would double-count.\n\nTwo atoms joined by a bond are already held at the right distance by that bond. Letting them also feel the full Lennard-Jones interaction would be describing the same thing twice, with two sets of parameters that were never fitted together.\n\n`special_bonds lj 0.0 0.0 0.5` is the answer: atoms one bond apart feel none of it, two bonds apart none, three bonds apart half. Those weights are part of the OPLS-AA force field, not a free choice.",
           "doc_link": "special_bonds",
           "anchor": "editor",
-          "highlight": "special_bonds lj 0.0 0.0 0.5",
+          "highlight": [
+            "pair_style lj/cut 14.0",
+            "special_bonds lj 0.0 0.0 0.5"
+          ],
           "call_to_action": "Look at the pair_style and special_bonds lines.",
           "predict": "`special_bonds lj 0.0 0.0 0.5` carries three numbers. Do you think they scale the interaction for atoms one, two and three bonds apart -- or for the first, second and third atom types?",
           "expect": "One, two and three bonds apart. Bonded neighbors are already held at the right distance by the bond itself, so letting them feel the full Lennard-Jones interaction as well would describe the same thing twice."
@@ -130,7 +143,9 @@
           "teach": "Before running anything, three questions worth asking of any force field. The materials-science companion article asks them of every potential it uses, and they are the difference between operating a simulation and understanding one.\n\n**First: what can this *kind* of potential describe at all?**\n\nA harmonic bond is a spring. Its energy is k(r - r_{0})^{2}, which rises without limit, so the force needed to stretch it rises without limit too. No parameter value changes that -- it is a property of the functional form, not of the numbers fed into it. A model built from harmonic bonds can describe a molecule vibrating about its shape. It cannot describe one coming apart.\n\nThat is not a defect. It is a statement of what the model is for.",
           "doc_link": "bond_style harmonic",
           "anchor": "editor",
-          "highlight": "bond_style harmonic",
+          "highlight": [
+            "bond_style harmonic"
+          ],
           "call_to_action": "Press Next.",
           "predict": "the parameters file sets the bond stiffness to 469 kcal/mol per square angstrom. If you raised it to 4690, or dropped it to 4.69, could you make the nanotube break?",
           "expect": "No. A stiffer spring resists more and a softer one resists less, but neither ever lets go: the energy still climbs without bound. Breaking needs a potential that flattens at long range, which is what the reactive force field in the second half of this tutorial provides. This is the single most useful thing to know about a force field -- what it cannot do, no matter how it is parameterized."
@@ -142,7 +157,10 @@
           "teach": "`read_data unbreakable.data` builds the box and the atoms, and this time it also brings the **topology**: which pairs are bonded, which triples form an angle, which quadruples form a dihedral or an improper, each tagged with a type.\n\nThat file was generated with VMD and TopoTools. Writing 700 atoms and their bonds by hand is not something anyone does.\n\n`include unbreakable.inc` then reads the numeric parameters -- `pair_coeff`, `bond_coeff`, `angle_coeff`, `dihedral_coeff`, `improper_coeff` -- as though they had been typed at that point. Keeping them in their own file means the same parameters can be reused, or swapped for a different force field, without touching the script.",
           "doc_link": "include",
           "anchor": "editor",
-          "highlight": "include unbreakable.inc",
+          "highlight": [
+            "read_data unbreakable.data",
+            "include unbreakable.inc"
+          ],
           "call_to_action": "Right-click unbreakable.inc in the editor and view it. Find the bond_coeff line.",
           "predict": "the .inc file holds five coefficient lines. Which one do you think fixes the 1.4 angstrom carbon-carbon distance?",
           "expect": "`bond_coeff 1 469 1.4` -- the second number is the spring constant in kcal/mol per square angstrom, and the third is the equilibrium length. The 469 is what makes a C-C bond stiff."
@@ -156,7 +174,9 @@
           "predict": "you are about to pull this tube and read a force off it. Before you do -- is that force a measurement of a carbon nanotube, or of something else?",
           "expect": "Of the model. It is a real property of a network of harmonic springs whose parameters were fitted to the densities of organic liquids. The geometry it gives you is trustworthy to about a percent because that is what OPLS-AA was fitted for; the stiffness is an extrapolation nobody checked. Knowing which of your numbers are which is most of what separates a simulation from a result.",
           "anchor": "editor",
-          "highlight": "include unbreakable.inc",
+          "highlight": [
+            "include unbreakable.inc"
+          ],
           "call_to_action": "Press Next."
         }
       ]

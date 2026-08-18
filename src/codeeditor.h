@@ -156,9 +156,19 @@ public:
      * pending line this is never inserted, never accepted and never withdrawn
      * -- it is the user's own text, and clearing the mark leaves it alone.
      */
-    bool markLine(const QString &text);
+    bool markLine(const QString &text) { return markLines(QStringList{text}) > 0; }
 
-    /** @brief Take the mark off whatever line carries it */
+    /**
+     * @brief Ring several lines that are already in the script
+     * @param texts the lines to mark, each matched exactly after trimming
+     * @return how many were found
+     *
+     * A step explaining four style commands rings all four; ringing one of
+     * them would tell the reader the other three are something else.
+     */
+    int markLines(const QStringList &texts);
+
+    /** @brief Take the mark off whatever lines carry it */
     void clearMarkedLine();
 
     /**
@@ -577,9 +587,9 @@ private:
     int pendingLine = -1;
     /// number of blocks the pending group covers, starting at pendingLine
     int pendingCount = 0;
-    /// Block number of a line the tour is pointing at but did not write; -1
-    /// when nothing is marked.  Never inserted, accepted or withdrawn.
-    int markedLine = -1;
+    /// Block numbers of lines the tour is pointing at but did not write.
+    /// Never inserted, accepted or withdrawn -- they are the user's own text.
+    QList<int> markedLines;
     /// Command the user is being guided to type; painted faded behind them.
     QString guide;
     bool reformatOnReturn;    ///< Enable auto-reformatting on Enter

@@ -339,11 +339,11 @@ void TutorialView::showCurrentStep()
     if (group.isEmpty() || !anyTypedInGroup(group)) coach->setDrillHelpers(false);
 
     // the question goes up with the step; the answer waits until they act
-    coach->setPrediction(step->predict);
+    coach->setPrediction(renderText(step->predict));
     predictionShown = false;
 
     // a step explaining a line the tour did not write rings it instead
-    emit markLine(group.isEmpty() ? step->highlight : QString());
+    emit markLines(group.isEmpty() ? step->highlight : QStringList());
 
     // a step that asks the user to change a number in a line already written
     // carries the control to do it with
@@ -385,7 +385,7 @@ void TutorialView::commandCommitted(const QString &written)
                                   .arg(got.at(i));
                         break;
                     }
-            coach->setFeedback(why, false);
+            coach->setFeedback(renderText(why), false);
             // hand the attempt back as the pending line rather than leaving it
             // committed and opening a fresh blank one below it: the feedback
             // names the word that is wrong, so the user wants to edit what they
@@ -434,7 +434,7 @@ void TutorialView::runFinished(bool success)
     if (!step->predict.isEmpty() && !predictionShown) {
         predictionShown = true;
         coach->setPrediction(QString());
-        coach->setFeedback(step->expect, true);
+        coach->setFeedback(renderText(step->expect), true);
         coach->setCallToAction(
             QStringLiteral("Was that what you expected? Press Next when you have looked."));
         return;
@@ -474,7 +474,7 @@ void TutorialView::goNext()
         if (!here->predict.isEmpty() && !predictionShown) {
             predictionShown = true;
             coach->setPrediction(QString());
-            coach->setFeedback(here->expect, true);
+            coach->setFeedback(renderText(here->expect), true);
             coach->setCallToAction(QStringLiteral("Press Next to carry on."));
             return;
         }
@@ -540,7 +540,7 @@ void TutorialView::showHint()
 {
     const CommandLine *cmd = engine->nextCommand();
     if (!cmd || !cmd->typed) return;
-    coach->setFeedback(cmd->hint, true);
+    coach->setFeedback(renderText(cmd->hint), true);
 }
 
 void TutorialView::revealAnswer()

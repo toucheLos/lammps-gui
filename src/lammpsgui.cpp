@@ -646,11 +646,11 @@ void LammpsGui::startInteractiveTutorial(const QString &path)
     connect(tutorialview, &TutorialView::offerCommand, textEdit, &CodeEditor::setPendingLine);
     connect(tutorialview, &TutorialView::offerCommands, textEdit, &CodeEditor::setPendingLines);
     connect(tutorialview, &TutorialView::guideText, textEdit, &CodeEditor::setGuideText);
-    connect(tutorialview, &TutorialView::markLine, textEdit, [this](const QString &text) {
-        if (text.isEmpty())
+    connect(tutorialview, &TutorialView::markLines, textEdit, [this](const QStringList &texts) {
+        if (texts.isEmpty())
             textEdit->clearMarkedLine();
         else
-            textEdit->markLine(text);
+            textEdit->markLines(texts);
     });
     connect(tutorialview, &TutorialView::withdrawCommand, textEdit, &CodeEditor::clearPendingLine);
     connect(tutorialview, &TutorialView::retractCommand, textEdit, &CodeEditor::removeTutorialLine);

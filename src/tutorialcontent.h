@@ -169,10 +169,12 @@ struct TutorialStep {
     /// comment line this step's commands belong under, e.g. "# 2) System
     /// definition"; empty appends at the end of the buffer
     QString section;
-    /// line already in the script that this step is talking about.  Rings it
-    /// without writing anything: for a tutorial whose input file arrives
-    /// complete, the opening steps explain lines the tour did not write.
-    QString highlight;
+    /// lines already in the script that this step is talking about.  Rings
+    /// them without writing anything: for a tutorial whose input file arrives
+    /// complete, the opening steps explain lines the tour did not write.  A
+    /// step discussing four style commands should name all four -- ringing one
+    /// of them tells the reader the other three are something else.
+    QStringList highlight;
     /// line this step's commands belong immediately *above*.  For a tutorial
     /// whose input file arrives complete rather than as a skeleton, the new
     /// lines go into the middle of an existing script -- above the `run`

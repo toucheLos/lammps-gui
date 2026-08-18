@@ -395,7 +395,14 @@ TutorialStep parseStep(const QJsonObject &obj, const QString &path, Ctx &ctx,
     readString(obj, QStringLiteral("open_file"), path, ctx, step.openFile);
     readString(obj, QStringLiteral("section"), path, ctx, step.section);
     readString(obj, QStringLiteral("before"), path, ctx, step.before);
-    readString(obj, QStringLiteral("highlight"), path, ctx, step.highlight);
+    // one line or several: a bare string is the common case and stays legal
+    if (obj.value(QStringLiteral("highlight")).isArray()) {
+        readStringList(obj, QStringLiteral("highlight"), path, ctx, step.highlight);
+    } else {
+        QString one;
+        if (readString(obj, QStringLiteral("highlight"), path, ctx, one) && !one.isEmpty())
+            step.highlight = QStringList{one};
+    }
     // two answers to the same question: where do this step's commands go?
     if (!step.section.isEmpty() && !step.before.isEmpty())
         ctx.error(sub(path, QStringLiteral("before")),
