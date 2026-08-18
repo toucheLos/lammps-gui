@@ -390,8 +390,18 @@ QRect CodeEditor::pendingLineArea() const
         // A guided line is only partly typed, and the faded remainder occupies
         // the rest of it.  Measuring what has been typed so far would let the
         // callout be placed over the very text the user is following.
-        if (!guide.isEmpty() && number == pendingLine)
-            textWidth = qMax(textWidth, QFontMetricsF(font()).horizontalAdvance(guide));
+        if (!guide.isEmpty() && number == pendingLine) {
+            // measured the way it is drawn -- bold command word, plain
+            // arguments -- so the ring is not a few pixels short of the text
+            const int firstSpace = guide.indexOf(QLatin1Char(' '));
+            const int cmdEnd     = firstSpace < 0 ? guide.size() : firstSpace;
+            QFont bold(font());
+            bold.setWeight(QFont::Bold);
+            const qreal guideWidth =
+                QFontMetricsF(bold).horizontalAdvance(guide.left(cmdEnd)) +
+                QFontMetricsF(font()).horizontalAdvance(guide.mid(cmdEnd));
+            textWidth = qMax(textWidth, guideWidth);
+        }
 
         const QRect line(static_cast<int>(geom.left()), static_cast<int>(geom.top()),
                          static_cast<int>(textWidth), static_cast<int>(geom.height()));
@@ -903,15 +913,47 @@ void CodeEditor::paintEvent(QPaintEvent *event)
         const QTextBlock block = document()->findBlockByNumber(pendingLine);
         if (block.isValid() && block.isVisible()) {
             const QString typed = block.text();
-            if (guide.startsWith(typed)) {
+            const QTextLayout *layout = block.layout();
+            if (guide.startsWith(typed) && layout && layout->lineCount() > 0) {
                 const QRectF geom = blockBoundingGeometry(block).translated(contentOffset());
+
+                // Where the typed text actually ends, asked of the layout that
+                // drew it.  Measuring it with QFontMetrics on the base font
+                // gets this wrong: the syntax highlighter renders commands in
+                // bold, so the real text is wider than the plain font says and
+                // the guide sat to the left of the caret, drifting further with
+                // every character.
+                const QTextLine line = layout->lineForTextPosition(typed.size());
+                const qreal x =
+                    line.isValid() ? line.cursorToX(typed.size()) : layout->lineAt(0).cursorToX(0);
+
+                // And drawn in the weight it will have once typed, so the
+                // letters do not thicken and shift as the user passes through
+                // them.  The highlighter bolds the command word; the arguments
+                // after it are plain.  (A variable reference in the arguments
+                // is bold too -- a pixel of residual movement there, against
+                // duplicating the whole highlighting rule set here.)
+                const int firstSpace = guide.indexOf(QLatin1Char(' '));
+                const int cmdEnd     = firstSpace < 0 ? guide.size() : firstSpace;
+
+                QFont bold(font());
+                bold.setWeight(QFont::Bold);
+
                 QPainter ghost(viewport());
                 ghost.setPen(Coach::guide());
-                ghost.setFont(font());
-                const QFontMetricsF fm(font());
-                ghost.drawText(QPointF(geom.left() + fm.horizontalAdvance(typed),
-                                       geom.top() + fm.ascent()),
-                               guide.mid(typed.size()));
+                const QPointF at(geom.left() + x, geom.top() + QFontMetricsF(font()).ascent());
+
+                if (typed.size() < cmdEnd) {
+                    const QString rest = guide.mid(typed.size(), cmdEnd - typed.size());
+                    ghost.setFont(bold);
+                    ghost.drawText(at, rest);
+                    ghost.setFont(font());
+                    ghost.drawText(at + QPointF(QFontMetricsF(bold).horizontalAdvance(rest), 0),
+                                   guide.mid(cmdEnd));
+                } else {
+                    ghost.setFont(font());
+                    ghost.drawText(at, guide.mid(typed.size()));
+                }
             }
         }
     }
